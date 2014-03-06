@@ -15,15 +15,16 @@ namespace na62 {
 
 class Sender: public AExecutable {
 public:
-	Sender(uint sourceID);
+	Sender(uint sourceID, uint numberOfTelBoards);
 	virtual ~Sender();
 private:
 	uint sourceID_;
+	uint numberOfTelBoards_;
 
 	void thread();
 
-	void sendMEPs(int threadNum, uint8_t sourceID, uint tel62Num);
-	uint16_t sendMEP(int8_t threadNum, char* buffer, uint32_t firstEventNum,
+	void sendMEPs(uint8_t sourceID, uint tel62Num);
+	uint16_t sendMEP(char* buffer, uint32_t firstEventNum,
 			const unsigned short eventsPerMEP, uint& randomLength,
 			char* randomData, bool isLastMEPOfBurst);
 

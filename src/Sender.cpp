@@ -27,20 +27,20 @@
 
 namespace na62 {
 
-Sender::Sender(uint sourceID) :
-		sourceID_(sourceID) {
+Sender::Sender(uint sourceID, uint numberOfTelBoards) :
+		sourceID_(sourceID), numberOfTelBoards_(numberOfTelBoards) {
 }
 
 Sender::~Sender() {
 }
 
 void Sender::thread() {
-	sendMEPs(threadNum_, threadNum_, threadNum_);
+	sendMEPs(sourceID_, 1);
 }
 
-void Sender::sendMEPs(int threadNum, uint8_t sourceID, uint tel62Num) {
-	char* macAddr = EthernetUtils::StringToMAC("90:E2:BA:19:8D:B4");
-	std::string hostIP = "10.194.20.13";
+void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
+	char* macAddr = EthernetUtils::StringToMAC("90:E2:BA:19:90:8C");
+	std::string hostIP = "10.194.20.12";
 
 	char* packet = new char[MTU];
 	for (int i = 0; i < MTU; i++) {
@@ -61,7 +61,7 @@ void Sender::sendMEPs(int threadNum, uint8_t sourceID, uint tel62Num) {
 
 	uint bursts = 1;
 	uint eventsPerMEP = 10;
-	uint packetsPerBurst = 1000;
+	uint packetsPerBurst = 10000;
 
 	l0::MEP_RAW_HDR* mep = (l0::MEP_RAW_HDR*) (packet + sizeof(struct UDP_HDR));
 	mep->eventCount = eventsPerMEP;
@@ -90,9 +90,8 @@ void Sender::sendMEPs(int threadNum, uint8_t sourceID, uint tel62Num) {
 			bool isLastMEPOfBurst = MEPNum
 					== packetsPerBurst * (1 + BurstNum) - 1;
 			for (uint i = 0; i < tel62Num; i++) {
-				dataSent += sendMEP(threadNum, packet, firstEventNum,
-						eventsPerMEP, randomLength, randomData,
-						isLastMEPOfBurst);
+				dataSent += sendMEP(packet, firstEventNum, eventsPerMEP,
+						randomLength, randomData, isLastMEPOfBurst);
 			}
 			firstEventNum += eventsPerMEP;
 		}
@@ -106,7 +105,7 @@ void Sender::sendMEPs(int threadNum, uint8_t sourceID, uint tel62Num) {
 	delete[] packet;
 }
 
-uint16_t Sender::sendMEP(int8_t threadNum, char* buffer, uint32_t firstEventNum,
+uint16_t Sender::sendMEP(char* buffer, uint32_t firstEventNum,
 		const unsigned short eventsPerMEP, uint& randomLength, char* randomData,
 		bool isLastMEPOfBurst) {
 
@@ -156,8 +155,7 @@ uint16_t Sender::sendMEP(int8_t threadNum, char* buffer, uint32_t firstEventNum,
 	udpHeader->udp.check = EthernetUtils::GenerateUDPChecksum(udpHeader,
 			MEPLength);
 
-	PFringHandler::SendPacketConcurrently(threadNum, buffer,
-			MEPLength + sizeof(struct UDP_HDR));
+	PFringHandler::SendFrame(buffer, MEPLength + sizeof(struct UDP_HDR));
 
 	return MEPLength + sizeof(struct UDP_HDR);
 }

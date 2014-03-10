@@ -61,7 +61,7 @@ void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
 
 	uint bursts = 1;
 	uint eventsPerMEP = 10;
-	uint packetsPerBurst = 10000;
+	uint packetsPerBurst = 10;
 
 	l0::MEP_RAW_HDR* mep = (l0::MEP_RAW_HDR*) (packet + sizeof(struct UDP_HDR));
 	mep->eventCount = eventsPerMEP;

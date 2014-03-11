@@ -27,8 +27,8 @@
 
 namespace na62 {
 
-Sender::Sender(uint sourceID, uint numberOfTelBoards) :
-		sourceID_(sourceID), numberOfTelBoards_(numberOfTelBoards) {
+Sender::Sender(uint sourceID, uint numberOfTelBoards, uint numberOfMEPsPerBurst) :
+		sourceID_(sourceID), numberOfTelBoards_(numberOfTelBoards), numberOfMEPsPerBurst_(numberOfMEPsPerBurst) {
 }
 
 Sender::~Sender() {
@@ -61,7 +61,6 @@ void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
 
 	uint bursts = 1;
 	uint eventsPerMEP = 10;
-	uint packetsPerBurst = 10;
 
 	l0::MEP_RAW_HDR* mep = (l0::MEP_RAW_HDR*) (packet + sizeof(struct UDP_HDR));
 	mep->eventCount = eventsPerMEP;
@@ -85,10 +84,10 @@ void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
 			tickStart = Stopwatch::GetTicks();
 			dataSent = 0;
 		}
-		for (unsigned int MEPNum = BurstNum * packetsPerBurst;
-				MEPNum < packetsPerBurst * (1 + BurstNum); MEPNum++) {
+		for (unsigned int MEPNum = BurstNum * numberOfMEPsPerBurst_;
+				MEPNum < numberOfMEPsPerBurst_ * (1 + BurstNum); MEPNum++) {
 			bool isLastMEPOfBurst = MEPNum
-					== packetsPerBurst * (1 + BurstNum) - 1;
+					== numberOfMEPsPerBurst_ * (1 + BurstNum) - 1;
 			for (uint i = 0; i < tel62Num; i++) {
 				dataSent += sendMEP(packet, firstEventNum, eventsPerMEP,
 						randomLength, randomData, isLastMEPOfBurst);

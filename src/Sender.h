@@ -15,11 +15,12 @@ namespace na62 {
 
 class Sender: public AExecutable {
 public:
-	Sender(uint sourceID, uint numberOfTelBoards);
+	Sender(uint sourceID, uint numberOfTelBoards, uint numberOfMEPsPerBurst);
 	virtual ~Sender();
 private:
 	uint sourceID_;
 	uint numberOfTelBoards_;
+	uint numberOfMEPsPerBurst_;
 
 	void thread();
 

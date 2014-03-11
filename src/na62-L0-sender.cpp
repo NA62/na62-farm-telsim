@@ -14,6 +14,12 @@ using namespace std;
 using namespace na62;
 
 int main(int argc, char* argv[]) {
+	if (argc < 2) {
+		std::cerr << "Using " << argv[0]
+				<< " <NumberOfMEPsPerBurst> [other options...]" << std::endl;
+	}
+	uint numberOfMEPsPerBurst = atoi(argv[1]);
+
 	Options::Initialize(argc, argv);
 
 	InitializeLogging(argv);
@@ -25,7 +31,8 @@ int main(int argc, char* argv[]) {
 	int threadID = 0;
 	std::vector<Sender*> senders;
 	for (auto sourceID : sourceIDs) {
-		Sender* sender = new Sender(sourceID.first, sourceID.second);
+		Sender* sender = new Sender(sourceID.first, sourceID.second,
+				numberOfMEPsPerBurst);
 		senders.push_back(sender);
 		sender->startThread(threadID++, -1, 15);
 	}

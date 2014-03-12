@@ -24,7 +24,7 @@ int main(int argc, char* argv[]) {
 
 	InitializeLogging(argv);
 
-	PFringHandler::Initialize("dna0");
+	PFringHandler pfRingHandler("dna0");
 
 	auto sourceIDs = Options::GetIntPairList(OPTION_DATA_SOURCE_IDS);
 

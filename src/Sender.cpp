@@ -28,7 +28,8 @@
 namespace na62 {
 
 Sender::Sender(uint sourceID, uint numberOfTelBoards, uint numberOfMEPsPerBurst) :
-		sourceID_(sourceID), numberOfTelBoards_(numberOfTelBoards), numberOfMEPsPerBurst_(numberOfMEPsPerBurst) {
+		sourceID_(sourceID), numberOfTelBoards_(numberOfTelBoards), numberOfMEPsPerBurst_(
+				numberOfMEPsPerBurst) {
 }
 
 Sender::~Sender() {
@@ -39,8 +40,10 @@ void Sender::thread() {
 }
 
 void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
-	char* macAddr = EthernetUtils::StringToMAC("90:E2:BA:19:90:8C");
-	std::string hostIP = "10.194.20.12";
+//	char* macAddr = EthernetUtils::StringToMAC("90:E2:BA:19:90:8C"); //farm6
+	char* macAddr = EthernetUtils::StringToMAC("00:1B:21:B5:BE:BC");//farm2
+
+	std::string hostIP = "10.194.20.13";
 
 	char* packet = new char[MTU];
 	for (int i = 0; i < MTU; i++) {

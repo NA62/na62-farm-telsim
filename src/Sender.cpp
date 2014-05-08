@@ -13,7 +13,7 @@
 #include <l0/MEPEvent.h>
 #include <netinet/ip.h>
 #include <netinet/udp.h>
-#include <options/Options.h>
+#include "../options/MyOptions.h"
 #include <socket/EthernetUtils.h>
 #include <socket/PFringHandler.h>
 #include <structs/Network.h>

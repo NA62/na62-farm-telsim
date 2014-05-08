@@ -3,7 +3,7 @@
 // Author      : Jonas Kunze (kunze.jonas@gmail.com)
 //============================================================================
 
-#include <options/Options.h>
+#include "../options/MyOptions.h"
 #include <socket/PFringHandler.h>
 #include <utils/LoggingHandler.hpp>
 #include <vector>

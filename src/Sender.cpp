@@ -13,7 +13,7 @@
 #include <l0/MEPEvent.h>
 #include <netinet/ip.h>
 #include <netinet/udp.h>
-#include "../options/MyOptions.h"
+#include "options/MyOptions.h"
 #include <socket/EthernetUtils.h>
 #include <socket/PFringHandler.h>
 #include <structs/Network.h>
@@ -39,8 +39,8 @@ void Sender::thread() {
 }
 
 void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
-	char* macAddr = EthernetUtils::StringToMAC("90:E2:BA:19:90:8C");
-	std::string hostIP = "10.194.20.12";
+	char* macAddr = EthernetUtils::StringToMAC(Options::GetString(OPTION_RECEIVER_MAC));
+	std::string hostIP = Options::GetString(OPTION_RECEIVER_IP);
 
 	char* packet = new char[MTU];
 	for (int i = 0; i < MTU; i++) {
@@ -48,7 +48,7 @@ void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
 	}
 
 	EthernetUtils::GenerateUDP(packet, macAddr, inet_addr(hostIP.c_str()), 6666,
-			Options::GetInt(OPTION_L0_RECEIVER_PORT));
+			MyOptions::GetInt(OPTION_L0_RECEIVER_PORT));
 
 	uint32_t firstEventNum = 0;
 

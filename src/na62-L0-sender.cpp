@@ -5,7 +5,6 @@
 
 
 #include <socket/PFringHandler.h>
-#include <utils/LoggingHandler.hpp>
 #include <vector>
 
 #include "options/MyOptions.h"
@@ -16,8 +15,6 @@ using namespace na62;
 
 int main(int argc, char* argv[]) {
 	MyOptions::Load(argc, argv);
-
-	InitializeLogging(argv);
 
 	PFringHandler pfRingHandler("dna0");
 

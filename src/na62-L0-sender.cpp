@@ -3,11 +3,11 @@
 // Author      : Jonas Kunze (kunze.jonas@gmail.com)
 //============================================================================
 
-
 #include <socket/PFringHandler.h>
 #include <vector>
 
 #include "options/MyOptions.h"
+#include <eventBuilding/SourceIDManager.h>
 #include "Sender.h"
 
 using namespace std;
@@ -23,10 +23,17 @@ int main(int argc, char* argv[]) {
 	int threadID = 0;
 	std::vector<Sender*> senders;
 	for (auto sourceID : sourceIDs) {
+		if (sourceID.first == SOURCE_ID_LKr) {
+			// Skip lkr data
+			continue;
+		}
+		std::cout << "Starting sender with SourceID " << std::hex
+				<< sourceID.first << std::endl;
 		Sender* sender = new Sender(sourceID.first, sourceID.second,
 				Options::GetInt(OPTION_MEPS_PER_BURST));
 		senders.push_back(sender);
-		sender->startThread(threadID++, "Sender"+std::to_string((int)sourceID.first), -1, 15);
+		sender->startThread(threadID++,
+				"Sender" + std::to_string((int) sourceID.first), -1, 15);
 	}
 
 	AExecutable::JoinAll();

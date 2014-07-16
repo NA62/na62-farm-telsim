@@ -10,7 +10,7 @@
 #include <arpa/inet.h>
 #include <boost/asio/io_service.hpp>
 #include <l0/MEP.h>
-#include <l0/MEPEvent.h>
+#include <l0/MEPFragment.h>
 #include <netinet/ip.h>
 #include <netinet/udp.h>
 #include "options/MyOptions.h"
@@ -63,7 +63,7 @@ void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
 	uint bursts = 1;
 	uint eventsPerMEP = 10;
 
-	l0::MEP_RAW_HDR* mep = (l0::MEP_RAW_HDR*) (packet + sizeof(struct UDP_HDR));
+	l0::MEP_HDR* mep = (l0::MEP_HDR*) (packet + sizeof(struct UDP_HDR));
 	mep->eventCount = eventsPerMEP;
 	mep->sourceID = sourceID;
 
@@ -110,9 +110,9 @@ uint16_t Sender::sendMEP(char* buffer, uint32_t firstEventNum,
 		bool isLastMEPOfBurst) {
 
 // Write the MEP header
-	struct l0::MEP_RAW_HDR* mep = (struct l0::MEP_RAW_HDR*) (buffer
+	struct l0::MEP_HDR* mep = (struct l0::MEP_HDR*) (buffer
 			+ sizeof(struct UDP_HDR));
-	uint32_t offset = sizeof(struct UDP_HDR) + sizeof(struct l0::MEP_RAW_HDR); // data header length
+	uint32_t offset = sizeof(struct UDP_HDR) + sizeof(struct l0::MEP_HDR); // data header length
 
 	for (uint32_t eventNum = firstEventNum;
 			eventNum < firstEventNum + eventsPerMEP; eventNum++) {
@@ -124,7 +124,7 @@ uint16_t Sender::sendMEP(char* buffer, uint32_t firstEventNum,
 			eventLength = 1500 - sizeof(struct UDP_HDR) - offset;
 		}
 		// Write the Event header
-		l0::MEPEVENT_RAW_HDR* event = (l0::MEPEVENT_RAW_HDR*) (buffer + offset);
+		l0::MEPFragment_HDR* event = (l0::MEPFragment_HDR*) (buffer + offset);
 		event->eventLength_ = eventLength;
 		event->eventNumberLSB_ = eventNum;
 		event->reserved_ = 0;
@@ -134,9 +134,9 @@ uint16_t Sender::sendMEP(char* buffer, uint32_t firstEventNum,
 
 		unsigned long int randomOffset = rand() % eventLength;
 
-		memcpy(buffer + offset + sizeof(l0::MEPEVENT_RAW_HDR),
+		memcpy(buffer + offset + sizeof(l0::MEPFragment_HDR),
 				randomData + randomOffset,
-				eventLength - sizeof(l0::MEPEVENT_RAW_HDR));
+				eventLength - sizeof(l0::MEPFragment_HDR));
 
 		offset += eventLength;
 	}

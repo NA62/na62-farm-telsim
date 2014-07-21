@@ -16,7 +16,9 @@ using namespace na62;
 int main(int argc, char* argv[]) {
 	MyOptions::Load(argc, argv);
 
-	PFringHandler pfRingHandler("dna0");
+	if (Options::Isset(OPTION_USE_PF_RING)) {
+		PFringHandler pfRingHandler("dna0");
+	}
 
 	auto sourceIDs = Options::GetIntPairList(OPTION_DATA_SOURCE_IDS);
 

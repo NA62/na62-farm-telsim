@@ -20,8 +20,11 @@
 #define OPTION_DATA_SOURCE_IDS (char*)"L0DataSourceIDs"
 
 #define OPTION_MEPS_PER_BURST (char*)"NumberOfMEPsPerBurst"
+#define OPTION_EVENTS_PER_MEP (char*)"EventsPerMEP"
 #define OPTION_RECEIVER_MAC (char*)"ReceiverMAC"
 #define OPTION_RECEIVER_IP (char*)"ReceiverIP"
+
+#define OPTION_USE_PF_RING (char*)"UsePfRing"
 
 /*
  * Performance
@@ -55,7 +58,13 @@ public:
 				"MAC address where the MEPs should be sent to")
 
 		(OPTION_RECEIVER_IP, po::value<std::string>()->required(),
-				"IP address where the MEPs should be sent to");
+				"IP address where the MEPs should be sent to")
+
+		(OPTION_USE_PF_RING, "If this flag is set, pf_ring will be used instead of boost (linux kernel sockets)")
+
+		(OPTION_EVENTS_PER_MEP, po::value<int>()->default_value(10), "Number of events within each MEP")
+
+		;
 
 		Options::Initialize(argc, argv, desc);
 	}

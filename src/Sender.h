@@ -8,8 +8,10 @@
 #ifndef SENDER_H_
 #define SENDER_H_
 
+#include <boost/asio/ip/udp.hpp>
 #include <sys/types.h>
 #include <utils/AExecutable.h>
+#include <cstdint>
 
 namespace na62 {
 
@@ -21,6 +23,10 @@ private:
 	uint sourceID_;
 	uint numberOfTelBoards_;
 	uint numberOfMEPsPerBurst_;
+
+	boost::asio::io_service io_service_;
+	boost::asio::ip::udp::socket socket_;
+	boost::asio::ip::udp::endpoint receiver_endpoint_;
 
 	void thread();
 

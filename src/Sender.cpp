@@ -171,7 +171,7 @@ uint16_t Sender::sendMEP(char* buffer, uint32_t firstEventNum,
 			MEPLength);
 
 	if (Options::Isset(OPTION_USE_PF_RING)) {
-		DataContainer c = {buffer, MEPLength + sizeof(struct UDP_HDR)};
+		DataContainer c = {buffer, MEPLength + sizeof(struct UDP_HDR), false};
 		NetworkHandler::AsyncSendFrame(std::move(c));
 		NetworkHandler::DoSendQueuedFrames(0);
 	} else {

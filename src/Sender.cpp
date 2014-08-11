@@ -14,7 +14,7 @@
 #include <netinet/udp.h>
 #include "options/MyOptions.h"
 #include <socket/EthernetUtils.h>
-#include <socket/PFringHandler.h>
+#include <socket/NetworkHandler.h>
 #include <structs/Network.h>
 #include <utils/Stopwatch.h>
 #include <cstdbool>
@@ -172,8 +172,8 @@ uint16_t Sender::sendMEP(char* buffer, uint32_t firstEventNum,
 
 	if (Options::Isset(OPTION_USE_PF_RING)) {
 		DataContainer c = {buffer, MEPLength + sizeof(struct UDP_HDR)};
-		PFringHandler::AsyncSendFrame(std::move(c));
-		PFringHandler::DoSendQueuedFrames(0);
+		NetworkHandler::AsyncSendFrame(std::move(c));
+		NetworkHandler::DoSendQueuedFrames(0);
 	} else {
 		/*
 		 * Kernel socket version

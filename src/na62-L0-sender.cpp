@@ -3,7 +3,7 @@
 // Author      : Jonas Kunze (kunze.jonas@gmail.com)
 //============================================================================
 
-#include <socket/PFringHandler.h>
+#include <socket/NetworkHandler.h>
 #include <vector>
 
 #include "options/MyOptions.h"
@@ -17,7 +17,7 @@ int main(int argc, char* argv[]) {
 	MyOptions::Load(argc, argv);
 
 	if (Options::Isset(OPTION_USE_PF_RING)) {
-		PFringHandler pfRingHandler("dna0");
+		NetworkHandler NetworkHandler("dna0");
 	}
 
 	auto sourceIDs = Options::GetIntPairList(OPTION_DATA_SOURCE_IDS);

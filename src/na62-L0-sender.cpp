@@ -18,6 +18,8 @@ int main(int argc, char* argv[]) {
 
 	if (Options::Isset(OPTION_USE_PF_RING)) {
 		NetworkHandler NetworkHandler("dna0");
+	} else {
+		NetworkHandler NetworkHandler("eth2");
 	}
 
 	auto sourceIDs = Options::GetIntPairList(OPTION_DATA_SOURCE_IDS);

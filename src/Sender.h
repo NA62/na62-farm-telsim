@@ -23,10 +23,13 @@ private:
 	uint sourceID_;
 	uint numberOfTelBoards_;
 	uint numberOfMEPsPerBurst_;
+	uint eventLength_;
 
 	boost::asio::io_service io_service_;
 	boost::asio::ip::udp::socket socket_;
 	boost::asio::ip::udp::endpoint receiver_endpoint_;
+
+
 
 	void thread();
 

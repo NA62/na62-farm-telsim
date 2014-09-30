@@ -26,6 +26,8 @@
 
 #define OPTION_USE_PF_RING (char*)"UsePfRing"
 
+#define OPTION_EVENT_LENGTH (char*)"BytesPerMepFragment"
+
 /*
  * Performance
  */
@@ -63,6 +65,9 @@ public:
 		(OPTION_USE_PF_RING, "If this flag is set, pf_ring will be used instead of boost (linux kernel sockets)")
 
 		(OPTION_EVENTS_PER_MEP, po::value<int>()->default_value(10), "Number of events within each MEP")
+
+		(OPTION_EVENT_LENGTH, po::value<int>()->default_value(140), "Length of every MEP fragment")
+
 
 		;
 

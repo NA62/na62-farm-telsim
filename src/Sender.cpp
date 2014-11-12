@@ -8,14 +8,13 @@
 #include "Sender.h"
 
 #include <arpa/inet.h>
-#include <boost/asio/io_service.hpp>
 #include <l0/MEP.h>
-#include <l0/MEPEvent.h>
+#include <l0/MEPFragment.h>
 #include <netinet/ip.h>
 #include <netinet/udp.h>
 #include "options/MyOptions.h"
 #include <socket/EthernetUtils.h>
-#include <socket/PFringHandler.h>
+#include <socket/NetworkHandler.h>
 #include <structs/Network.h>
 #include <utils/Stopwatch.h>
 #include <cstdbool>
@@ -25,11 +24,29 @@
 #include <iostream>
 #include <string>
 
+#include <boost/array.hpp>
+#include <boost/asio.hpp>
+
 namespace na62 {
 
 Sender::Sender(uint sourceID, uint numberOfTelBoards, uint numberOfMEPsPerBurst) :
 		sourceID_(sourceID), numberOfTelBoards_(numberOfTelBoards), numberOfMEPsPerBurst_(
-				numberOfMEPsPerBurst) {
+				numberOfMEPsPerBurst), eventLength_(0), io_service_(), socket_(
+				io_service_) {
+
+	if (!Options::Isset(OPTION_USE_PF_RING)) {
+		using boost::asio::ip::udp;
+
+		udp::resolver resolver(io_service_);
+		udp::resolver::query query(udp::v4(),
+				Options::GetString(OPTION_RECEIVER_IP),
+				std::to_string(MyOptions::GetInt(OPTION_L0_RECEIVER_PORT)));
+		receiver_endpoint_ = *resolver.resolve(query);
+
+		socket_.open(udp::v4());
+	}
+
+	eventLength_ = MyOptions::GetInt(OPTION_EVENT_LENGTH);
 }
 
 Sender::~Sender() {
@@ -40,13 +57,12 @@ void Sender::thread() {
 }
 
 void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
-	char* macAddr = EthernetUtils::StringToMAC(Options::GetString(OPTION_RECEIVER_MAC));
+	char* macAddr = EthernetUtils::StringToMAC(
+			Options::GetString(OPTION_RECEIVER_MAC));
 	std::string hostIP = Options::GetString(OPTION_RECEIVER_IP);
 
 	char* packet = new char[MTU];
-	for (int i = 0; i < MTU; i++) {
-		packet[i] = 0;
-	}
+	memset(packet, 0, MTU);
 
 	EthernetUtils::GenerateUDP(packet, macAddr, inet_addr(hostIP.c_str()), 6666,
 			MyOptions::GetInt(OPTION_L0_RECEIVER_PORT));
@@ -61,9 +77,9 @@ void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
 	}
 
 	uint bursts = 1;
-	uint eventsPerMEP = 10;
+	uint eventsPerMEP = Options::GetInt(OPTION_EVENTS_PER_MEP);
 
-	l0::MEP_RAW_HDR* mep = (l0::MEP_RAW_HDR*) (packet + sizeof(struct UDP_HDR));
+	l0::MEP_HDR* mep = (l0::MEP_HDR*) (packet + sizeof(struct UDP_HDR));
 	mep->eventCount = eventsPerMEP;
 	mep->sourceID = sourceID;
 
@@ -110,40 +126,46 @@ uint16_t Sender::sendMEP(char* buffer, uint32_t firstEventNum,
 		bool isLastMEPOfBurst) {
 
 // Write the MEP header
-	struct l0::MEP_RAW_HDR* mep = (struct l0::MEP_RAW_HDR*) (buffer
+	struct l0::MEP_HDR* mep = (struct l0::MEP_HDR*) (buffer
 			+ sizeof(struct UDP_HDR));
-	uint32_t offset = sizeof(struct UDP_HDR) + sizeof(struct l0::MEP_RAW_HDR); // data header length
+	uint32_t offset = sizeof(struct UDP_HDR) + sizeof(struct l0::MEP_HDR); // data header length
 
+	uint numberOfProcesses = Options::GetInt(OPTION_PROCESS_NUM);
+	uint senderID = Options::GetInt(OPTION_SENDER_ID);
 	for (uint32_t eventNum = firstEventNum;
 			eventNum < firstEventNum + eventsPerMEP; eventNum++) {
-		uint16_t eventLength = 140;
 
-		if (offset + eventLength > 1500 - sizeof(struct UDP_HDR)) {
-			std::cerr << "Random event size too big for MTU: " << eventLength
+		if (offset + eventLength_ > MTU - sizeof(struct UDP_HDR)) {
+			std::cerr << "Random event size too big for MTU: " << eventLength_
 					<< std::endl;
-			eventLength = 1500 - sizeof(struct UDP_HDR) - offset;
+			eventLength_ = MTU - sizeof(struct UDP_HDR) - offset;
 		}
+		uint eventID = senderID + numberOfProcesses * eventNum;
 		// Write the Event header
-		l0::MEPEVENT_RAW_HDR* event = (l0::MEPEVENT_RAW_HDR*) (buffer + offset);
-		event->eventLength_ = eventLength;
-		event->eventNumberLSB_ = eventNum;
+		l0::MEPFragment_HDR* event = (l0::MEPFragment_HDR*) (buffer + offset);
+		event->eventLength_ = eventLength_;
+		event->eventNumberLSB_ = eventID;
 		event->reserved_ = 0;
 		event->lastEventOfBurst_ = isLastMEPOfBurst
-				&& (eventNum == firstEventNum + eventsPerMEP - 1);
-		event->timestamp_ = eventNum;
+				&& (eventID == firstEventNum + eventsPerMEP - 1);
+		event->timestamp_ = eventID;
 
-		unsigned long int randomOffset = rand() % eventLength;
+		unsigned long int randomOffset = rand() % eventLength_;
 
-		memcpy(buffer + offset + sizeof(l0::MEPEVENT_RAW_HDR),
+		memcpy(buffer + offset + sizeof(l0::MEPFragment_HDR),
 				randomData + randomOffset,
-				eventLength - sizeof(l0::MEPEVENT_RAW_HDR));
+				eventLength_ - sizeof(l0::MEPFragment_HDR));
 
-		offset += eventLength;
+//		for (uint i = 0; i != eventLength_ - sizeof(l0::MEPFragment_HDR); i++) {
+//			memset(buffer + offset + sizeof(l0::MEPFragment_HDR) + i, i/10, 1);
+//		}
+
+		offset += eventLength_;
 	}
 
 	uint16_t MEPLength = offset - sizeof(struct UDP_HDR);
 
-	mep->firstEventNum = firstEventNum;
+	mep->firstEventNum =  senderID + numberOfProcesses * firstEventNum;
 	mep->mepLength = MEPLength;
 
 	struct UDP_HDR* udpHeader = (struct UDP_HDR*) buffer;
@@ -155,7 +177,19 @@ uint16_t Sender::sendMEP(char* buffer, uint32_t firstEventNum,
 	udpHeader->udp.check = EthernetUtils::GenerateUDPChecksum(udpHeader,
 			MEPLength);
 
-	PFringHandler::SendFrame(buffer, MEPLength + sizeof(struct UDP_HDR));
+	if (Options::Isset(OPTION_USE_PF_RING)) {
+		DataContainer c = { buffer, (uint16_t) (MEPLength
+				+ sizeof(struct UDP_HDR)), false };
+		NetworkHandler::AsyncSendFrame(std::move(c));
+		NetworkHandler::DoSendQueuedFrames(0);
+	} else {
+		/*
+		 * Kernel socket version
+		 */
+		socket_.send_to(
+				boost::asio::buffer(buffer + sizeof(UDP_HDR), MEPLength),
+				receiver_endpoint_);
+	}
 
 	return MEPLength + sizeof(struct UDP_HDR);
 }

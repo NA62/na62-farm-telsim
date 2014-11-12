@@ -31,7 +31,8 @@ namespace na62 {
 
 Sender::Sender(uint sourceID, uint numberOfTelBoards, uint numberOfMEPsPerBurst) :
 		sourceID_(sourceID), numberOfTelBoards_(numberOfTelBoards), numberOfMEPsPerBurst_(
-				numberOfMEPsPerBurst), eventLength_(0), io_service_(), socket_(io_service_) {
+				numberOfMEPsPerBurst), eventLength_(0), io_service_(), socket_(
+				io_service_) {
 
 	if (!Options::Isset(OPTION_USE_PF_RING)) {
 		using boost::asio::ip::udp;
@@ -129,6 +130,8 @@ uint16_t Sender::sendMEP(char* buffer, uint32_t firstEventNum,
 			+ sizeof(struct UDP_HDR));
 	uint32_t offset = sizeof(struct UDP_HDR) + sizeof(struct l0::MEP_HDR); // data header length
 
+	uint numberOfProcesses = Options::GetInt(OPTION_PROCESS_NUM);
+	uint senderID = Options::GetInt(OPTION_SENDER_ID);
 	for (uint32_t eventNum = firstEventNum;
 			eventNum < firstEventNum + eventsPerMEP; eventNum++) {
 
@@ -137,14 +140,15 @@ uint16_t Sender::sendMEP(char* buffer, uint32_t firstEventNum,
 					<< std::endl;
 			eventLength_ = MTU - sizeof(struct UDP_HDR) - offset;
 		}
+		uint eventID = senderID + numberOfProcesses * eventNum;
 		// Write the Event header
 		l0::MEPFragment_HDR* event = (l0::MEPFragment_HDR*) (buffer + offset);
 		event->eventLength_ = eventLength_;
-		event->eventNumberLSB_ = eventNum;
+		event->eventNumberLSB_ = eventID;
 		event->reserved_ = 0;
 		event->lastEventOfBurst_ = isLastMEPOfBurst
-				&& (eventNum == firstEventNum + eventsPerMEP - 1);
-		event->timestamp_ = eventNum;
+				&& (eventID == firstEventNum + eventsPerMEP - 1);
+		event->timestamp_ = eventID;
 
 		unsigned long int randomOffset = rand() % eventLength_;
 
@@ -161,7 +165,7 @@ uint16_t Sender::sendMEP(char* buffer, uint32_t firstEventNum,
 
 	uint16_t MEPLength = offset - sizeof(struct UDP_HDR);
 
-	mep->firstEventNum = firstEventNum;
+	mep->firstEventNum =  senderID + numberOfProcesses * firstEventNum;
 	mep->mepLength = MEPLength;
 
 	struct UDP_HDR* udpHeader = (struct UDP_HDR*) buffer;

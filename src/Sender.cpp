@@ -136,8 +136,8 @@ uint16_t Sender::sendMEP(char* buffer, uint32_t firstEventNum,
 			eventNum < firstEventNum + eventsPerMEP; eventNum++) {
 
 		if (offset + eventLength_ > MTU - sizeof(struct UDP_HDR)) {
-			std::cerr << "Random event size too big for MTU: " << eventLength_
-					<< std::endl;
+			LOG_ERROR << "Random event size too big for MTU: " << eventLength_
+					<< ENDL;
 			eventLength_ = MTU - sizeof(struct UDP_HDR) - offset;
 		}
 		uint eventID = senderID + numberOfProcesses * eventNum;

@@ -5,6 +5,7 @@
 
 #include <socket/NetworkHandler.h>
 #include <vector>
+#include <options/Logging.h>
 
 #include "options/MyOptions.h"
 #include <eventBuilding/SourceIDManager.h>
@@ -31,8 +32,8 @@ int main(int argc, char* argv[]) {
 			// Skip lkr data
 			continue;
 		}
-		std::cout << "Starting sender with SourceID " << std::hex
-				<< sourceID.first << std::endl;
+		LOG_INFO << "Starting sender with SourceID " << std::hex
+				<< sourceID.first << ENDL;
 		Sender* sender = new Sender(sourceID.first, sourceID.second,
 				Options::GetInt(OPTION_MEPS_PER_BURST));
 		senders.push_back(sender);

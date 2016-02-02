@@ -19,6 +19,9 @@ class Sender: public AExecutable {
 public:
 	Sender(uint sourceID, uint numberOfTelBoards, uint numberOfMEPsPerBurst);
 	virtual ~Sender();
+	uint getSentData() {
+		return sentData_;
+	}
 private:
 	uint sourceID_;
 	uint numberOfTelBoards_;
@@ -29,7 +32,7 @@ private:
 	boost::asio::ip::udp::socket socket_;
 	boost::asio::ip::udp::endpoint receiver_endpoint_;
 
-
+	uint sentData_;
 
 	void thread();
 

@@ -47,13 +47,14 @@ Sender::Sender(uint sourceID, uint numberOfTelBoards, uint numberOfMEPsPerBurst)
 	}
 
 	eventLength_ = MyOptions::GetInt(OPTION_EVENT_LENGTH);
+	sentData_=0;
 }
 
 Sender::~Sender() {
 }
 
 void Sender::thread() {
-	sendMEPs(sourceID_, 1);
+	sendMEPs(sourceID_, numberOfTelBoards_);
 }
 
 void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
@@ -63,6 +64,7 @@ void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
 
 	char* packet = new char[MTU];
 	memset(packet, 0, MTU);
+
 
 	EthernetUtils::GenerateUDP(packet, macAddr, inet_addr(hostIP.c_str()), 6666,
 			MyOptions::GetInt(OPTION_L0_RECEIVER_PORT));
@@ -76,7 +78,7 @@ void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
 		memcpy(randomData + (i * sizeof(int)), &data, sizeof(int));
 	}
 
-	uint bursts = 1;
+
 	uint eventsPerMEP = Options::GetInt(OPTION_EVENTS_PER_MEP);
 
 	l0::MEP_HDR* mep = (l0::MEP_HDR*) (packet + sizeof(struct UDP_HDR));
@@ -95,25 +97,27 @@ void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
 //	}
 
 	uint32_t breakCounter = 0;
-	uint32_t dataSent = 0;
+	//uint32_t dataSent = 0;
+	uint bursts = 1;
 	for (unsigned int BurstNum = 0; BurstNum < bursts; BurstNum++) {
 		if (ticksToWaitPerKByte > 0 && breakCounter++ % 100 == 0) {
 			tickStart = Stopwatch::GetTicks();
-			dataSent = 0;
+			//dataSent = 0;
 		}
 		for (unsigned int MEPNum = BurstNum * numberOfMEPsPerBurst_;
 				MEPNum < numberOfMEPsPerBurst_ * (1 + BurstNum); MEPNum++) {
 			bool isLastMEPOfBurst = MEPNum
 					== numberOfMEPsPerBurst_ * (1 + BurstNum) - 1;
 			for (uint i = 0; i < tel62Num; i++) {
-				dataSent += sendMEP(packet, firstEventNum, eventsPerMEP,
+			//	std::cout << "sendMEPs for source ID " << (int) sourceID_ <<":"<< i << std::endl;
+				sentData_ += sendMEP(packet, firstEventNum, eventsPerMEP,
 						randomLength, randomData, isLastMEPOfBurst);
 			}
 			firstEventNum += eventsPerMEP;
 		}
 		if (breakCounter % 100 == 0) {
 			while ((Stopwatch::GetTicks() - tickStart)
-					< (dataSent * ticksToWaitPerKByte))
+					< (sentData_ * ticksToWaitPerKByte))
 				;
 		}
 	}
@@ -132,8 +136,7 @@ uint16_t Sender::sendMEP(char* buffer, uint32_t firstEventNum,
 
 	uint numberOfProcesses = Options::GetInt(OPTION_PROCESS_NUM);
 	uint senderID = Options::GetInt(OPTION_SENDER_ID);
-	for (uint32_t eventNum = firstEventNum;
-			eventNum < firstEventNum + eventsPerMEP; eventNum++) {
+	for (uint32_t eventNum = firstEventNum; eventNum < firstEventNum + eventsPerMEP; eventNum++) {
 
 		if (offset + eventLength_ > MTU - sizeof(struct UDP_HDR)) {
 			LOG_ERROR << "Random event size too big for MTU: " << eventLength_
@@ -178,17 +181,22 @@ uint16_t Sender::sendMEP(char* buffer, uint32_t firstEventNum,
 			MEPLength);
 
 	if (Options::Isset(OPTION_USE_PF_RING)) {
-		DataContainer c = { buffer, (uint16_t) (MEPLength
-				+ sizeof(struct UDP_HDR)), false };
+		//std::cout << "PFRING " <<std::endl;
+		DataContainer c = { buffer, (uint16_t) (MEPLength + sizeof(struct UDP_HDR)), false };
 		NetworkHandler::AsyncSendFrame(std::move(c));
 		NetworkHandler::DoSendQueuedFrames(0);
 	} else {
 		/*
 		 * Kernel socket version
 		 */
+
 		socket_.send_to(
 				boost::asio::buffer(buffer + sizeof(UDP_HDR), MEPLength),
 				receiver_endpoint_);
+
+		boost::this_thread::sleep(boost::posix_time::microsec(5000));
+		//std::cout << "Sent " << (int) MEPLength << " to destination from "
+		//			<< (int)(mep->sourceID) << ":" << (int)(mep->sourceSubID) << std::endl;
 	}
 
 	return MEPLength + sizeof(struct UDP_HDR);

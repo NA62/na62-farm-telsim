@@ -27,12 +27,21 @@ private:
 	uint numberOfTelBoards_;
 	uint numberOfMEPsPerBurst_;
 	uint eventLength_;
-
+	uint durationSeconds_;
+	uint pauseSeconds_;
+	uint burstNum_;
+	uint sentData_;
+	uint autoburst_;
 	boost::asio::io_service io_service_;
 	boost::asio::ip::udp::socket socket_;
 	boost::asio::ip::udp::endpoint receiver_endpoint_;
+	/***L1***/
+	//boost::asio::io_service io_servicel1_;
+	//boost::asio::ip::udp::socket socketl1_;
+	//boost::asio::ip::udp::endpoint receiver_endpointl1_;
 
-	uint sentData_;
+
+
 
 	void thread();
 

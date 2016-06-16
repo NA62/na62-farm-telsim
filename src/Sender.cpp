@@ -8,10 +8,10 @@
 #include "Sender.h"
 #include "SenderL1.h"
 
-
-#include <socket/NetworkHandler.h>
 #include <fcntl.h>
+#include <fstream>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <arpa/inet.h>
 #include <l0/MEP.h>
 #include <l0/MEPFragment.h>
@@ -20,10 +20,8 @@
 #include "options/MyOptions.h"
 #include <socket/EthernetUtils.h>
 #include <socket/NetworkHandler.h>
-#include <monitoring/IPCHandler.h>
 #include <structs/Network.h>
 #include <utils/Stopwatch.h>
-#include <src/options/MyOptions.h>
 #include <cstdbool>
 #include <cstdint>
 #include <cstdlib>
@@ -31,13 +29,15 @@
 #include <iostream>
 #include <string>
 #include <utility>
+//#include <chrono>
+#include <boost/date_time/posix_time/posix_time.hpp>
 
 #include <boost/array.hpp>
 #include <boost/chrono.hpp>
 #include <boost/asio.hpp>
 
 #define BUFSIZE 65000
-#define BUFI 1024
+#define BUFI 128
 
 
 
@@ -48,12 +48,12 @@ namespace na62 {
 
 
 Sender::Sender(uint sourceID, uint numberOfTelBoards, uint numberOfMEPsPerBurst) :
-		sourceID_(sourceID), numberOfTelBoards_(numberOfTelBoards), numberOfMEPsPerBurst_(
-				numberOfMEPsPerBurst), eventLength_(0), io_service_(), socket_(
-				io_service_), burstNum_(0), sentData_(0), autoburst_(0) {
+				sourceID_(sourceID), numberOfTelBoards_(numberOfTelBoards), numberOfMEPsPerBurst_(
+						numberOfMEPsPerBurst), eventLength_(0), io_service_(), socket_(
+								io_service_), burstNum_(0), sentData_(0), autoburst_(0), sock_(0), timebased_(0), num_mens_(0) {
 
-	//if (!Options::Isset(OPTION_USE_PF_RING)) {
-using boost::asio::ip::udp;
+
+	using boost::asio::ip::udp;
 
 	udp::resolver resolver(io_service_);
 	udp::resolver::query query(udp::v4(), MyOptions::GetString(OPTION_RECEIVER_IP), std::to_string(MyOptions::GetInt(OPTION_L0_RECEIVER_PORT)));
@@ -63,6 +63,8 @@ using boost::asio::ip::udp;
 	pauseSeconds_ = MyOptions::GetInt(OPTION_DURATION_PAUSE);
 	eventLength_ = MyOptions::GetInt(OPTION_EVENT_LENGTH);
 	autoburst_ = MyOptions::GetInt(OPTION_AUTO_BURST);
+	timebased_ = MyOptions::GetInt(OPTION_TIME_BASED);
+	start_ = boost::posix_time::microsec_clock::local_time();
 
 
 }
@@ -104,107 +106,95 @@ void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
 	mep->eventCount = eventsPerMEP;
 	mep->sourceID = sourceID;
 
-	//double ticksToWaitPerKByte = -1;
-	//uint64_t tickStart = Stopwatch::GetTicks();
-	//	if (vm.count(CONOPTION_TRANSMISSION_RATE)) {
-	//		uint64_t Bps = vm[CONOPTION_TRANSMISSION_RATE].as<double>() * 1000000000
-	//				/ 8;
-	//		mycout("Sending with " << Bps << "Gbps");
-	//		if (Bps > 0) {
-	//			ticksToWaitPerKByte = Stopwatch::GetCPUFrequency() / Bps;
-	//		}
-	//	}
+	if(autoburst_ != 1 && timebased_ != 1){
 
-	//uint32_t breakCounter = 0;
-	//uint32_t dataSent = 0;
-	//uint bursts = 1;
-	//uint BurstNum = 0;
+		uint bursts = 1;
+		for (unsigned int BurstNum = 0; BurstNum < bursts; BurstNum++) {
 
-	//for (unsigned int BurstNum = 0; BurstNum < bursts; BurstNum++) {
-	//while (true){
-	//	if (burstNum_ > 0)
-	//	{
-	//		std::cout<<"Restarting events generation"<< std::endl;}
+			for (unsigned int MEPNum = BurstNum * numberOfMEPsPerBurst_;
+					MEPNum < numberOfMEPsPerBurst_ * (1 + BurstNum); MEPNum++) {
+				bool isLastMEPOfBurst = MEPNum
+						== numberOfMEPsPerBurst_ * (1 + BurstNum) - 1;
+				for (uint i = 0; i < tel62Num; i++) {
 
+					//std::cout << "sendMEPs for source ID " << (int) sourceID_ <<":"<< i << std::endl;
+					sentData_ += sendMEP(packet, firstEventNum, eventsPerMEP,
+							randomLength, randomData, isLastMEPOfBurst);
+				}
+				firstEventNum += eventsPerMEP;
+			}
 
-if(autoburst_ == 1){
+		}
+
+		delete[] packet;
 
 
+	}if(autoburst_ == 1){
 
 
 
-	while (true){
+		struct sockaddr_in senderAddr;
+		socklen_t senderLen;
+		char buff[BUFI];
+		int sock = net_bind_udp();
+		//bool chBurst = false;
 
-		//uint basta = IPCHandler::getTelsimStop();
-		//if (basta == 1){
-		//	std::cout << "cambia" << std::endl;
-		//}
+		while (true){
 
-		//if (ticksToWaitPerKByte > 0 && breakCounter++ % 100 == 0) {
-		//	tickStart = Stopwatch::GetTicks();
-		//dataSent = 0;
-		//	}
-		//for (unsigned int MEPNum = BurstNum * numberOfMEPsPerBurst_;
-		//		MEPNum < numberOfMEPsPerBurst_ * (1 + BurstNum); MEPNum++) {
-		//	bool isLastMEPOfBurst = MEPNum == numberOfMEPsPerBurst_ * (1 + BurstNum) - 1;
-		//for (uint i = 0; i < tel62Num; i++) {
-		//	std::cout << "sendMEPs for source ID " << (int) sourceID_ <<":"<< i << std::endl;
-		sentData_ += sendMEP(packet, firstEventNum, eventsPerMEP,
-				randomLength, randomData, 0);
-		//}
-		firstEventNum += eventsPerMEP;
-		//}
-		//	if (breakCounter % 100 == 0) {
-		//		while ((Stopwatch::GetTicks() - tickStart)
-		//				< (sentData_ * ticksToWaitPerKByte))
-		//		;
-		//}
+			ssize_t res = recvfrom(sock, (void*) buff, BUFI, MSG_DONTWAIT, (struct sockaddr *)&senderAddr, &senderLen);
+			if (res > 0){
+				//std::cout<< "Stop sending L0 data" << std::endl;
+				break;
+				//chBurst = true;
+			}
+
+			for (uint i = 0; i < tel62Num; i++) {
+
+				sentData_ += sendMEP(packet, firstEventNum, eventsPerMEP,
+						randomLength, randomData, 0);
+			}
+			firstEventNum += eventsPerMEP;
+
+		}
+		//After breaking the loop suddenly, let's send last
+		for (uint i = 0; i < tel62Num; i++) {
+			sentData_ += sendMEP(packet, firstEventNum, eventsPerMEP,
+					randomLength, randomData, 1);
+		}
+		close(sock);
+		firstEventNum = 0;
+		delete[] packet;
+
+
+	}if(timebased_ == 1 && autoburst_ != 1){
+
+		time_t start = time(0);
+		time_t timeLeft = (time_t) durationSeconds_;
+
+		while ((timeLeft > 0))
+		{
+			time_t end = time(0);
+			time_t timeTaken = end - start;
+			timeLeft = durationSeconds_ - timeTaken;
+
+			for (uint i = 0; i < tel62Num; i++) {
+
+				sentData_ += sendMEP(packet, firstEventNum, eventsPerMEP,
+						randomLength, randomData, 0);
+			}
+			firstEventNum += eventsPerMEP;
+
+		}
+		//After breaking the loop suddenly, let's send last
+		for (uint i = 0; i < tel62Num; i++) {
+			sentData_ += sendMEP(packet, firstEventNum, eventsPerMEP,
+					randomLength, randomData, 1);
+		}
+
+		firstEventNum = 0;
+		delete[] packet;
+
 	}
-	sentData_ += sendMEP(packet, firstEventNum, eventsPerMEP,
-			randomLength, randomData, 1);
-
-	firstEventNum = 0;
-	delete[] packet;
-
-
-}else{
-
-	time_t start = time(0);
-	time_t timeLeft = (time_t) durationSeconds_;
-
-	while ((timeLeft > 0))
-	{
-		time_t end = time(0);
-		time_t timeTaken = end - start;
-		timeLeft = durationSeconds_ - timeTaken;
-
-		//if (ticksToWaitPerKByte > 0 && breakCounter++ % 100 == 0) {
-		//	tickStart = Stopwatch::GetTicks();
-		//dataSent = 0;
-		//	}
-		//for (unsigned int MEPNum = BurstNum * numberOfMEPsPerBurst_;
-		//		MEPNum < numberOfMEPsPerBurst_ * (1 + BurstNum); MEPNum++) {
-		//	bool isLastMEPOfBurst = MEPNum == numberOfMEPsPerBurst_ * (1 + BurstNum) - 1;
-		//for (uint i = 0; i < tel62Num; i++) {
-		//	std::cout << "sendMEPs for source ID " << (int) sourceID_ <<":"<< i << std::endl;
-		sentData_ += sendMEP(packet, firstEventNum, eventsPerMEP,
-				randomLength, randomData, 0);
-		//}
-		firstEventNum += eventsPerMEP;
-		//}
-		//	if (breakCounter % 100 == 0) {
-		//		while ((Stopwatch::GetTicks() - tickStart)
-		//				< (sentData_ * ticksToWaitPerKByte))
-		//		;
-		//}
-	}
-	sentData_ += sendMEP(packet, firstEventNum, eventsPerMEP,
-			randomLength, randomData, 1);
-
-	firstEventNum = 0;
-	delete[] packet;
-
-}
 
 
 }
@@ -213,9 +203,12 @@ uint16_t Sender::sendMEP(char* buffer, uint32_t firstEventNum,
 		const unsigned short eventsPerMEP, uint& randomLength, char* randomData,
 		bool isLastMEPOfBurst) {
 
+	boost::posix_time::time_duration timeTaken;
+	boost::posix_time::ptime end;
 
 
-// Write the MEP header
+
+	// Write the MEP header
 	struct l0::MEP_HDR* mep = (struct l0::MEP_HDR*) (buffer + sizeof(struct UDP_HDR));
 	uint32_t offset = sizeof(struct UDP_HDR) + sizeof(struct l0::MEP_HDR); // data header length
 
@@ -244,9 +237,6 @@ uint16_t Sender::sendMEP(char* buffer, uint32_t firstEventNum,
 				randomData + randomOffset,
 				eventLength_ - sizeof(l0::MEPFragment_HDR));
 
-//		for (uint i = 0; i != eventLength_ - sizeof(l0::MEPFragment_HDR); i++) {
-//			memset(buffer + offset + sizeof(l0::MEPFragment_HDR) + i, i/10, 1);
-//		}
 
 		offset += eventLength_;
 	}
@@ -257,29 +247,80 @@ uint16_t Sender::sendMEP(char* buffer, uint32_t firstEventNum,
 	mep->mepLength = MEPLength;
 
 
+	socket_.send_to(boost::asio::buffer(buffer + sizeof(UDP_HDR), MEPLength),receiver_endpoint_);
+	num_mens_ = num_mens_ + 1;
 
-		/*
-		 * Kernel socket version
-		 */
+	//for (int i=0; i < 1; i++){}
 
-		socket_.send_to(
-				boost::asio::buffer(buffer + sizeof(UDP_HDR)/*data without UDP Header*/, MEPLength/*size*/),
-				receiver_endpoint_);
+	//boost::this_thread::sleep(boost::posix_time::microsec(1));
 
-		boost::this_thread::sleep(boost::posix_time::microsec(10));
+	end = boost::posix_time::microsec_clock::local_time();
+	timeTaken = end - start_;
+				if (timeTaken.total_seconds() > 1){
 
-
-
-
-			//}//end else if select OK
-		//std::cout << "Sent " << (int) MEPLength << " to destination from "
-		//			<< (int)(mep->sourceID) << ":" << (int)(mep->sourceSubID) << std::endl;
-
+							start_ = boost::posix_time::second_clock::local_time();
+							std::cout << "MEPs enviados: " << num_mens_ << std::endl;
+							//std::cout << "Rate: "<< num_mens / 1000000 << " MHz" << std::endl;
+							//fs << num_msgs_sec << "\n" << std::flush;
+							//num_mens = 0;
+				}
 
 	return MEPLength + sizeof(struct UDP_HDR);
-  }
+}
+
+int Sender::net_bind_udp()
+{
+	struct sockaddr_in hostAddr;
+	bzero(&hostAddr, sizeof(hostAddr));
+	hostAddr.sin_family = PF_INET;
+	//inet_pton(AF_INET, "137.138.104.155", &(hostAddr.sin_addr.s_addr));
+	hostAddr.sin_addr.s_addr = htonl(INADDR_ANY); //use in_addr with listen_addr or get any IP address available htonl(INADDR_ANY)
+	hostAddr.sin_port = htons(55555);//MyOptions::GetInt(OPTION_L0_RECEIVER_PORT));
+
+	sock_ = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	if (sock_ < 0) {
+		perror("socket()");
+	}
+
+	int one = 1;
+	int r = setsockopt(sock_, SOL_SOCKET, SO_REUSEADDR, (char*)&one,
+			   sizeof(one));
+	if (r < 0) {
+		perror("setsockopt(SO_REUSEADDR)");
+	}
 
 
+
+	int r1 = setsockopt(sock_, SOL_SOCKET, SO_REUSEPORT, (char*)&one, sizeof(one));
+	if (r1 < 0) {
+		perror("setsockopt(SO_REUSEPORT)");
+
+	}
+
+	int n = 128;
+	if (setsockopt(sock_, SOL_SOCKET, SO_RCVBUF, &n, sizeof(n)) == -1) {
+				perror("setting buffer");
+			}
+
+
+	//if (setsockopt(socket_, SOL_SOCKET, SO_BINDTODEVICE, deviceName.c_str(), deviceName.length()) == -1) {
+	//				perror("SO_BINDTODEVICE");
+	//				close(socket_);
+	//				exit(EXIT_FAILURE);
+	//}
+
+	if (bind (sock_, (struct sockaddr *)&hostAddr, sizeof(hostAddr)) < 0) {
+		perror("bind()");
+	}
+	/* Bind to device */
+
+
+
+
+	return sock_;
+
+
+}
 
 
 } /* namespace na62 */

@@ -19,9 +19,15 @@ class Sender: public AExecutable {
 public:
 	Sender(uint sourceID, uint numberOfTelBoards, uint numberOfMEPsPerBurst);
 	virtual ~Sender();
+	int net_bind_udp();
 	uint getSentData() {
 		return sentData_;
 	}
+	inline void setSentDataToZero(){
+		sentData_ = 0;
+
+	}
+
 private:
 	uint sourceID_;
 	uint numberOfTelBoards_;
@@ -32,9 +38,15 @@ private:
 	uint burstNum_;
 	uint sentData_;
 	uint autoburst_;
+	uint sock_;
+	uint timebased_;
+	boost::posix_time::ptime start_;
+	std::atomic<uint32_t> num_mens_;
+
 	boost::asio::io_service io_service_;
 	boost::asio::ip::udp::socket socket_;
 	boost::asio::ip::udp::endpoint receiver_endpoint_;
+
 	/***L1***/
 	//boost::asio::io_service io_servicel1_;
 	//boost::asio::ip::udp::socket socketl1_;
@@ -49,6 +61,7 @@ private:
 	uint16_t sendMEP(char* buffer, uint32_t firstEventNum,
 			const unsigned short eventsPerMEP, uint& randomLength,
 			char* randomData, bool isLastMEPOfBurst);
+
 
 };
 

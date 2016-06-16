@@ -32,6 +32,7 @@
 #define OPTION_EVENT_LENGTH (char*)"BytesPerMepFragment"
 
 /****************/
+#define OPTION_TIME_BASED (char*)"TimeBasedEventsGeneration[0/1]"
 #define OPTION_DURATION_GENERATE_EVENTS (char*)"GenerateEventsFor(seconds)"
 #define OPTION_DURATION_PAUSE (char*) "PauseAmongGeneration(seconds)"
 /****************/
@@ -55,8 +56,7 @@ public:
 
 		(OPTION_CONFIG_FILE,
 				po::value<std::string>()->default_value(
-						"/etc/na62-telsim.conf"),
-				"Config file for the options shown here")
+						"/home/julio/workspace/na62-telsim.conf"), "Config file for the options shown here")
 
 		(OPTION_L0_RECEIVER_PORT, po::value<int>()->default_value(58913),
 				"UDP-Port for L1 data reception")
@@ -104,11 +104,15 @@ public:
 		(OPTION_DURATION_PAUSE, po::value<int>()->default_value(0),
 				"Pause generate events duration")
 
-		(OPTION_AUTO_BURST, po::value<int>()->default_value(0),
+		(OPTION_AUTO_BURST, po::value<int>()->default_value(2),
 				"Listen BurstID changes and stop sending L0 data when active")
 
 		(OPTION_DURATION_PAUSE_BBURST, po::value<int>()->default_value(4),
 				"Pause of L0 data generation after receiving a farm burstID change")
+
+		(OPTION_TIME_BASED, po::value<int>()->default_value(0),
+				"Events generation based on time: duration time and pause")
+
 
 				;
 

@@ -17,11 +17,11 @@
 #include <tbb/tbb.h>
 #include <pthread.h>
 #include <zmq.h>
-#include <options/Logging.h>
-#include <socket/ZMQHandler.h>
+//#include <options/Logging.h>
+//#include <socket/ZMQHandler.h>
 #include <zmq.hpp>
 #include "options/MyOptions.h"
-#include <eventBuilding/SourceIDManager.h>
+//#include <eventBuilding/SourceIDManager.h>
 #include "Sender.h"
 #include "SenderL1.h"
 
@@ -30,17 +30,21 @@
 using namespace std;
 using namespace na62;
 
+
+
 void *sendingL1(void *);
 
 int main(int argc, char* argv[]) {
 	MyOptions::Load(argc, argv);
 
 
-	NetworkHandler NetworkHandler("lo", MyOptions::GetInt(OPTION_L0_RECEIVER_PORT), MyOptions::GetInt(OPTION_CREAM_RECEIVER_PORT));
+	NetworkHandler NetworkHandler("lo", MyOptions::GetInt(OPTION_L0_RECEIVER_PORT), MyOptions::GetInt(OPTION_CREAM_RECEIVER_PORT), 1);
 	auto sourceIDs = Options::GetIntPairList(OPTION_DATA_SOURCE_IDS);
 
 
 	int threadID = 0;
+	//std::atomic<bool> chBurst;
+	uint32_t sentTotal = 0;
 	std::vector<Sender*> senders;
 
 	pthread_t threads[1];
@@ -56,75 +60,110 @@ int main(int argc, char* argv[]) {
 	}
 
 
-	int autoburst = MyOptions::GetInt(OPTION_AUTO_BURST);
-	int pauseSeconds = MyOptions::GetInt(OPTION_DURATION_PAUSE);
-	int pauseBurstSec = MyOptions::GetInt(OPTION_DURATION_PAUSE_BBURST);
-	int burstNum = 0;
+	uint autoburst = MyOptions::GetInt(OPTION_AUTO_BURST);
+	uint pauseSeconds = MyOptions::GetInt(OPTION_DURATION_PAUSE);
+	uint pauseBurstSec = MyOptions::GetInt(OPTION_DURATION_PAUSE_BBURST);
+	uint timebased = MyOptions::GetInt(OPTION_TIME_BASED);
+	uint burstNum = 0;
 
-	while (true){
-		boost::this_thread::sleep(boost::posix_time::microsec(1000));
-		std::cout << "BurstID " << burstNum << std::endl;
-		boost::this_thread::sleep(boost::posix_time::microsec(10));
+	//First option DEFAULT ONE: sending MEPs until the number define in options, then stop totally.
+	if (autoburst != 1 && timebased != 1){
 
-		if (burstNum > 0)
-		{std::cout<<"Restarting events generation"<< std::endl;}
-
+		auto sourceIDs = Options::GetIntPairList(OPTION_DATA_SOURCE_IDS);
+		std::vector<Sender*> senders;
 		for (auto sourceID : sourceIDs) {
 
 			std::cout << "Starting sender with SourceID " << std::hex
 					<< sourceID.first << ":" << sourceID.second << std::dec << std::endl;
-			Sender* sender = new Sender(sourceID.first, sourceID.second, Options::GetInt(OPTION_MEPS_PER_BURST));
+			Sender* sender = new Sender(sourceID.first, sourceID.second,
+					Options::GetInt(OPTION_MEPS_PER_BURST));
 			senders.push_back(sender);
 			sender->startThread(threadID++,
 					"Sender" + std::to_string((int) sourceID.first) + ":" + std::to_string((int) sourceID.second));
-
 		}
 
 
 		AExecutable::JoinAll();
-		uint sentData = 0;
-		for (auto snd : senders) {
 
+		uint sentData=0;
+		for (auto snd : senders) {
 			sentData+=snd->getSentData();
 
 		}
 		std::cout << "Sent " << sentData << " bytes" << std::endl;
 
-		if (autoburst == 0){
 
-			/**Normal Pause begins*/
-			time_t start2 = time(0);
-			time_t timeLeft2 = (time_t) pauseSeconds;
 
-			std::cout<< "Events generation is paused for " << pauseSeconds << " seconds" << std::endl;
+	}else{
+		//Second and third choices. Autoburst has been defined with 0 or 1.
+		while (true){
+
 			boost::this_thread::sleep(boost::posix_time::microsec(1000));
-			while ((timeLeft2 > 0))
-			{
-				time_t end2 = time(0);
-				time_t timeTaken2 = end2 - start2;
-				timeLeft2 = pauseSeconds - timeTaken2;
+			std::cout << "BurstID " << burstNum << std::endl;
+			boost::this_thread::sleep(boost::posix_time::microsec(10));
+
+			if (burstNum > 0)
+			{std::cout<<"Restarting events generation"<< std::endl;}
+
+			for (auto sourceID : sourceIDs) {
+
+				std::cout << "Starting sender with SourceID " << std::hex
+						<< sourceID.first << ":" << sourceID.second << std::dec << std::endl;
+				Sender* sender = new Sender(sourceID.first, sourceID.second, Options::GetInt(OPTION_MEPS_PER_BURST));
+				senders.push_back(sender);
+				sender->startThread(threadID++,
+						"Sender" + std::to_string((int) sourceID.first) + ":" + std::to_string((int) sourceID.second));
+
 			}
-			burstNum += 1;
-		}else{
-			/**Auto BurstId pause begins**/
 
-			time_t start2 = time(0);
-			time_t timeLeft2 = (time_t) pauseBurstSec;
 
-			std::cout<< "Events generation is paused for " << pauseBurstSec << " seconds" << std::endl;
-			boost::this_thread::sleep(boost::posix_time::microsec(1000));
-			while ((timeLeft2 > 0))
-			{
-				time_t end2 = time(0);
-				time_t timeTaken2 = end2 - start2;
-				timeLeft2 = pauseBurstSec - timeTaken2;
+			AExecutable::JoinAll();
+			uint sentData = 0;
+			for (auto snd : senders) {
+
+				sentData+=snd->getSentData();
+				snd->setSentDataToZero();
+
 			}
-			burstNum += 1;
+			std::cout << "Sent in last Burst " << sentData << " bytes" << std::endl;
+			sentTotal += sentData;
+			std::cout << "Total sent " << sentTotal << " bytes" << std::endl;
 
-			/**********/
+			if (timebased == 1 && autoburst != 1){
+
+				/**Normal Pause begins*/
+				time_t start2 = time(0);
+				time_t timeLeft2 = (time_t) pauseSeconds;
+
+				std::cout<< "Events generation is paused for " << pauseSeconds << " seconds" << std::endl;
+				boost::this_thread::sleep(boost::posix_time::microsec(1000));
+				while ((timeLeft2 > 0))
+				{
+					time_t end2 = time(0);
+					time_t timeTaken2 = end2 - start2;
+					timeLeft2 = pauseSeconds - timeTaken2;
+				}
+				burstNum += 1;
+			}if(autoburst == 1){
+				/**Auto BurstId pause begins**/
+
+				time_t start2 = time(0);
+				time_t timeLeft2 = (time_t) pauseBurstSec;
+
+				std::cout<< "Events generation is paused for " << pauseBurstSec << " seconds" << std::endl;
+				boost::this_thread::sleep(boost::posix_time::microsec(1000));
+				while ((timeLeft2 > 0))
+				{
+					time_t end2 = time(0);
+					time_t timeTaken2 = end2 - start2;
+					timeLeft2 = pauseBurstSec - timeTaken2;
+				}
+				burstNum += 1;
+
+				/**********/
+			}
 		}
 	}
-
 	return 0;
 }
 
@@ -162,7 +201,7 @@ void *sendingL1(void *threadid)
 	/*End socket receiveFrom*/
 
 
-	int eventLength_ = 4;//MyOptions::GetInt(OPTION_EVENT_LENGTH);
+	int eventLength = 4;//MyOptions::GetInt(OPTION_EVENT_LENGTH);
 	auto sourceL1IDs = Options::GetIntPairList(OPTION_L1_DATA_SOURCE_IDS);
 	char bufferl1[BUFSIZE];
 	memset(bufferl1, 0, BUFSIZE);
@@ -217,16 +256,19 @@ void *sendingL1(void *threadid)
 				hdrToBeSent->l0TriggerWord = triggerReceived->triggerTypeWord;
 				hdrToBeSent->numberOf4BWords = 5;
 
-				memcpy(packet + sizeof(l1::L1_EVENT_RAW_HDR), randomData, eventLength_);
+				memcpy(packet + sizeof(l1::L1_EVENT_RAW_HDR), randomData, eventLength);
 
+				uint i = 0;
 				for (auto sourceID : sourceL1IDs) {
-
+					uint telL1 = sourceID.second;
+					for (i=0; i<telL1; i++){
 					//hdrToBeSent->sourceSubID = sourceID.second;
 					hdrToBeSent->sourceID = sourceID.first;
 					memcpy(packet, reinterpret_cast<char*> (hdrToBeSent), sizeof(l1::L1_EVENT_RAW_HDR));
 
-					socket_.send_to(boost::asio::buffer(packet, eventLength_ + sizeof(l1::L1_EVENT_RAW_HDR)), receiver_endpoint_);
+					socket_.send_to(boost::asio::buffer(packet, eventLength + sizeof(l1::L1_EVENT_RAW_HDR)), receiver_endpoint_);
 
+					}
 				}
 				offsetTrigger -= sizeof(l1::TRIGGER_RAW_HDR);
 				numTriggers--;

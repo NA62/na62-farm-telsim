@@ -29,13 +29,13 @@ int main(int argc, char* argv[]) {
 	std::vector<Sender*> senders;
 	for (auto sourceID : sourceIDs) {
 		if (sourceID.first == SOURCE_ID_LKr) {
-			LOG_INFO << "Drop source "<< std::hex
-					<< sourceID.first << ":" << sourceID.second << std::dec << ENDL;
+			LOG_INFO("Drop source "<< std::hex
+					<< sourceID.first << ":" << sourceID.second << std::dec);
 			// Skip lkr data
 			continue;
 		}
-		LOG_INFO << "Starting sender with SourceID " << std::hex
-				<< sourceID.first << ":" << sourceID.second << std::dec << ENDL;
+		LOG_INFO("Starting sender with SourceID " << std::hex
+				<< sourceID.first << ":" << sourceID.second << std::dec);
 		Sender* sender = new Sender(sourceID.first, sourceID.second,
 				Options::GetInt(OPTION_MEPS_PER_BURST));
 		senders.push_back(sender);
@@ -50,6 +50,6 @@ int main(int argc, char* argv[]) {
 	for (auto snd : senders) {
 		sentData+=snd->getSentData();
 	}
-	LOG_INFO << "Sent " << sentData << " bytes" << ENDL;
+	LOG_INFO("Sent " << sentData << " bytes");
 	return 0;
 }

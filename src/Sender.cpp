@@ -40,6 +40,8 @@
 #define BUFSIZE 65000
 #define BUFI 128
 
+std::atomic<bool> chBurst;
+
 namespace na62 {
 
 Sender::Sender(uint sourceID, uint numberOfTelBoards, uint numberOfMEPsPerBurst) :
@@ -80,7 +82,7 @@ void Sender::thread() {
 void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
 
 	std::string hostIP = MyOptions::GetString(OPTION_RECEIVER_IP);
-	std::atomic<bool> chBurst;
+
 	char* packet = new char[MTU];
 	memset(packet, 0, MTU);
 	uint32_t firstEventNum = 0;
@@ -152,7 +154,7 @@ void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
 			sentData_ += sendMEP(packet, firstEventNum, eventsPerMEP,
 					randomLength, randomData, 1);
 		}
-		chBurst = false;
+		//chBurst = false;
 		close(sock);
 		firstEventNum = 0;
 		delete[] packet;

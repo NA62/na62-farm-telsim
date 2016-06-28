@@ -29,7 +29,8 @@
 #include <iostream>
 #include <string>
 #include <utility>
-//#include <chrono>
+#include <atomic>
+#include <tbb/spin_mutex.h>
 #include <boost/date_time/posix_time/posix_time.hpp>
 
 #include <boost/array.hpp>
@@ -39,18 +40,13 @@
 #define BUFSIZE 65000
 #define BUFI 128
 
-
-
-
 namespace na62 {
 
-
-
-
 Sender::Sender(uint sourceID, uint numberOfTelBoards, uint numberOfMEPsPerBurst) :
-				sourceID_(sourceID), numberOfTelBoards_(numberOfTelBoards), numberOfMEPsPerBurst_(
-						numberOfMEPsPerBurst), eventLength_(0), io_service_(), socket_(
-								io_service_), burstNum_(0), sentData_(0), autoburst_(0), sock_(0), timebased_(0), num_mens_(0) {
+						sourceID_(sourceID), numberOfTelBoards_(numberOfTelBoards),
+						numberOfMEPsPerBurst_(numberOfMEPsPerBurst), eventLength_(0), io_service_(),
+						socket_(io_service_), burstNum_(0), sentData_(0), autoburst_(0), sock_(0),
+						timebased_(0), num_mens_(0), frec_(0) {
 
 
 	using boost::asio::ip::udp;
@@ -65,6 +61,9 @@ Sender::Sender(uint sourceID, uint numberOfTelBoards, uint numberOfMEPsPerBurst)
 	autoburst_ = MyOptions::GetInt(OPTION_AUTO_BURST);
 	timebased_ = MyOptions::GetInt(OPTION_TIME_BASED);
 	start_ = boost::posix_time::microsec_clock::local_time();
+	myIP_ = EthernetUtils::GetIPOfInterface(MyOptions::GetString(OPTION_ETH_DEVICE_NAME));
+
+
 
 
 }
@@ -79,19 +78,12 @@ void Sender::thread() {
 }
 
 void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
-	char* macAddr = EthernetUtils::StringToMAC(
-			MyOptions::GetString(OPTION_RECEIVER_MAC));
-	std::string hostIP = MyOptions::GetString(OPTION_RECEIVER_IP);
 
+	std::string hostIP = MyOptions::GetString(OPTION_RECEIVER_IP);
+	std::atomic<bool> chBurst;
 	char* packet = new char[MTU];
 	memset(packet, 0, MTU);
-
-
-	EthernetUtils::GenerateUDP(packet, macAddr, inet_addr(hostIP.c_str()), 6666,
-			MyOptions::GetInt(OPTION_L0_RECEIVER_PORT));
-
 	uint32_t firstEventNum = 0;
-
 	uint randomLength = 100000 * sizeof(int);
 	char randomData[randomLength];
 	for (unsigned int i = 0; i < randomLength / sizeof(int); i++) {
@@ -102,7 +94,7 @@ void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
 
 	uint eventsPerMEP = Options::GetInt(OPTION_EVENTS_PER_MEP);
 
-	l0::MEP_HDR* mep = (l0::MEP_HDR*) (packet + sizeof(struct UDP_HDR));
+	l0::MEP_HDR* mep = (l0::MEP_HDR*) (packet);
 	mep->eventCount = eventsPerMEP;
 	mep->sourceID = sourceID;
 
@@ -116,7 +108,6 @@ void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
 				bool isLastMEPOfBurst = MEPNum
 						== numberOfMEPsPerBurst_ * (1 + BurstNum) - 1;
 				for (uint i = 0; i < tel62Num; i++) {
-
 					//std::cout << "sendMEPs for source ID " << (int) sourceID_ <<":"<< i << std::endl;
 					sentData_ += sendMEP(packet, firstEventNum, eventsPerMEP,
 							randomLength, randomData, isLastMEPOfBurst);
@@ -132,20 +123,20 @@ void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
 	}if(autoburst_ == 1){
 
 
-
 		struct sockaddr_in senderAddr;
 		socklen_t senderLen;
 		char buff[BUFI];
 		int sock = net_bind_udp();
-		//bool chBurst = false;
+		chBurst = false;
 
-		while (true){
+		while (!chBurst){
 
 			ssize_t res = recvfrom(sock, (void*) buff, BUFI, MSG_DONTWAIT, (struct sockaddr *)&senderAddr, &senderLen);
 			if (res > 0){
 				//std::cout<< "Stop sending L0 data" << std::endl;
+				chBurst = true;
 				break;
-				//chBurst = true;
+
 			}
 
 			for (uint i = 0; i < tel62Num; i++) {
@@ -161,6 +152,7 @@ void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
 			sentData_ += sendMEP(packet, firstEventNum, eventsPerMEP,
 					randomLength, randomData, 1);
 		}
+		chBurst = false;
 		close(sock);
 		firstEventNum = 0;
 		delete[] packet;
@@ -206,27 +198,23 @@ uint16_t Sender::sendMEP(char* buffer, uint32_t firstEventNum,
 	boost::posix_time::time_duration timeTaken;
 	boost::posix_time::ptime end;
 
-
-
-	// Write the MEP header
-	struct l0::MEP_HDR* mep = (struct l0::MEP_HDR*) (buffer + sizeof(struct UDP_HDR));
-	uint32_t offset = sizeof(struct UDP_HDR) + sizeof(struct l0::MEP_HDR); // data header length
+	//Write the MEP header
+	struct l0::MEP_HDR* mep = (struct l0::MEP_HDR*) (buffer);
+	uint32_t offset = sizeof(struct l0::MEP_HDR); // data header length
 
 	uint numberOfProcesses = Options::GetInt(OPTION_PROCESS_NUM);
 	uint senderID = Options::GetInt(OPTION_SENDER_ID);
 	for (uint32_t eventNum = firstEventNum; eventNum < firstEventNum + eventsPerMEP; eventNum++) {
 
-		if (offset + eventLength_ > MTU - sizeof(struct UDP_HDR)) {
-			std::cout << "Random event size too big for MTU: " << eventLength_
-					<< std::endl;
-			eventLength_ = MTU - sizeof(struct UDP_HDR) - offset;
+		if (offset + eventLength_ > MTU) {
+			std::cout << "Random event size too big for MTU: " << eventLength_<< std::endl;
+			eventLength_ = MTU - offset;
 		}
 		uint eventID = senderID + numberOfProcesses * eventNum;
 		// Write the Event header
 		l0::MEPFragment_HDR* event = (l0::MEPFragment_HDR*) (buffer + offset);
 		event->eventLength_ = eventLength_;
 		event->eventNumberLSB_ = eventID;
-		//std::cout<<eventID<<std::endl;
 		event->reserved_ = 0;
 		event->lastEventOfBurst_ = isLastMEPOfBurst && (eventID == firstEventNum + eventsPerMEP - 1);
 		event->timestamp_ = eventID;
@@ -241,31 +229,29 @@ uint16_t Sender::sendMEP(char* buffer, uint32_t firstEventNum,
 		offset += eventLength_;
 	}
 
-	uint16_t MEPLength = offset - sizeof(struct UDP_HDR);
+	uint16_t MEPLength = offset;
 
 	mep->firstEventNum =  senderID + numberOfProcesses * firstEventNum;
 	mep->mepLength = MEPLength;
 
 
-	socket_.send_to(boost::asio::buffer(buffer + sizeof(UDP_HDR), MEPLength),receiver_endpoint_);
-	num_mens_ = num_mens_ + 1;
+	socket_.send_to(boost::asio::buffer(buffer, MEPLength),receiver_endpoint_);
+	num_mens_.fetch_add(1, std::memory_order_relaxed);
+	frec_ = frec_ + 1;
 
-	//for (int i=0; i < 1; i++){}
-
-	//boost::this_thread::sleep(boost::posix_time::microsec(1));
+	boost::this_thread::sleep(boost::posix_time::microsec(1));
 
 	end = boost::posix_time::microsec_clock::local_time();
 	timeTaken = end - start_;
-				if (timeTaken.total_seconds() > 1){
+	if (timeTaken.total_seconds() > 1){
 
-							start_ = boost::posix_time::second_clock::local_time();
-							std::cout << "MEPs enviados: " << num_mens_ << std::endl;
-							//std::cout << "Rate: "<< num_mens / 1000000 << " MHz" << std::endl;
-							//fs << num_msgs_sec << "\n" << std::flush;
-							//num_mens = 0;
-				}
+		start_ = boost::posix_time::second_clock::local_time();
+		std::cout << "MEPs enviados: " << num_mens_ << std::endl;
+		std::cout << "Rate L0: "<< frec_ / 1000000 << " MHz" << std::endl;
+		frec_ = 0;
+	}
 
-	return MEPLength + sizeof(struct UDP_HDR);
+	return MEPLength;
 }
 
 int Sender::net_bind_udp()
@@ -273,51 +259,32 @@ int Sender::net_bind_udp()
 	struct sockaddr_in hostAddr;
 	bzero(&hostAddr, sizeof(hostAddr));
 	hostAddr.sin_family = PF_INET;
-	//inet_pton(AF_INET, "137.138.104.155", &(hostAddr.sin_addr.s_addr));
-	hostAddr.sin_addr.s_addr = htonl(INADDR_ANY); //use in_addr with listen_addr or get any IP address available htonl(INADDR_ANY)
+	//inet_pton(AF_INET, "10.194.20.9", &(hostAddr.sin_addr.s_addr));
+	hostAddr.sin_addr.s_addr = myIP_; //use in_addr with listen_addr or get any IP address available htonl(INADDR_ANY)
 	hostAddr.sin_port = htons(55555);//MyOptions::GetInt(OPTION_L0_RECEIVER_PORT));
 
-	sock_ = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
-	if (sock_ < 0) {
+	int sd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	if (sd < 0) {
 		perror("socket()");
 	}
 
 	int one = 1;
-	int r = setsockopt(sock_, SOL_SOCKET, SO_REUSEADDR, (char*)&one,
-			   sizeof(one));
-	if (r < 0) {
-		perror("setsockopt(SO_REUSEADDR)");
-	}
 
-
-
-	int r1 = setsockopt(sock_, SOL_SOCKET, SO_REUSEPORT, (char*)&one, sizeof(one));
+	int r1 = setsockopt(sd, SOL_SOCKET, SO_REUSEPORT, (char*)&one, sizeof(one));
 	if (r1 < 0) {
 		perror("setsockopt(SO_REUSEPORT)");
-
 	}
 
 	int n = 128;
-	if (setsockopt(sock_, SOL_SOCKET, SO_RCVBUF, &n, sizeof(n)) == -1) {
-				perror("setting buffer");
-			}
+	if (setsockopt(sd, SOL_SOCKET, SO_RCVBUF, &n, sizeof(n)) == -1) {
+		perror("setting buffer");
+	}
 
-
-	//if (setsockopt(socket_, SOL_SOCKET, SO_BINDTODEVICE, deviceName.c_str(), deviceName.length()) == -1) {
-	//				perror("SO_BINDTODEVICE");
-	//				close(socket_);
-	//				exit(EXIT_FAILURE);
-	//}
-
-	if (bind (sock_, (struct sockaddr *)&hostAddr, sizeof(hostAddr)) < 0) {
+	if (bind (sd, (struct sockaddr *)&hostAddr, sizeof(hostAddr)) < 0) {
 		perror("bind()");
 	}
-	/* Bind to device */
 
-
-
-
-	return sock_;
+	return sd;
 
 
 }

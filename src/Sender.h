@@ -23,6 +23,13 @@ public:
 	uint getSentData() {
 		return sentData_;
 	}
+	uint64_t getSentFrames() {
+		return num_mens_;
+	}
+	uint64_t getFrec() {
+		return frec_;
+	}
+
 	inline void setSentDataToZero(){
 		sentData_ = 0;
 
@@ -41,7 +48,9 @@ private:
 	uint sock_;
 	uint timebased_;
 	boost::posix_time::ptime start_;
-	std::atomic<uint32_t> num_mens_;
+	std::atomic<uint64_t> num_mens_;
+	std::atomic<double> frec_;
+	uint32_t myIP_;
 
 	boost::asio::io_service io_service_;
 	boost::asio::ip::udp::socket socket_;

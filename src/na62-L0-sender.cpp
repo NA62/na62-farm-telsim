@@ -6,6 +6,7 @@
 //============================================================================
 
 #include <socket/NetworkHandler.h>
+#include <socket/EthernetUtils.h>
 #include <vector>
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
@@ -17,11 +18,9 @@
 #include <tbb/tbb.h>
 #include <pthread.h>
 #include <zmq.h>
-//#include <options/Logging.h>
-//#include <socket/ZMQHandler.h>
 #include <zmq.hpp>
 #include "options/MyOptions.h"
-//#include <eventBuilding/SourceIDManager.h>
+
 #include "Sender.h"
 #include "SenderL1.h"
 
@@ -31,22 +30,26 @@ using namespace std;
 using namespace na62;
 
 
+std::atomic<uint64_t> framesl1;
+std::atomic<double> frec;
+boost::posix_time::ptime start;
+uint32_t myIP;
 
 void *sendingL1(void *);
 
 int main(int argc, char* argv[]) {
 	MyOptions::Load(argc, argv);
+	start = boost::posix_time::microsec_clock::local_time();
 
-
-	NetworkHandler NetworkHandler("lo", MyOptions::GetInt(OPTION_L0_RECEIVER_PORT), MyOptions::GetInt(OPTION_CREAM_RECEIVER_PORT), 1);
+	NetworkHandler NetworkHandler(MyOptions::GetString(OPTION_ETH_DEVICE_NAME), MyOptions::GetInt(OPTION_L0_RECEIVER_PORT), MyOptions::GetInt(OPTION_CREAM_RECEIVER_PORT), 1);
 	auto sourceIDs = Options::GetIntPairList(OPTION_DATA_SOURCE_IDS);
 
 
 	int threadID = 0;
-	//std::atomic<bool> chBurst;
 	uint32_t sentTotal = 0;
 	std::vector<Sender*> senders;
 
+	//L1 threading. Only one thread at the moment.
 	pthread_t threads[1];
 	int rc;
 	int i;
@@ -59,12 +62,14 @@ int main(int argc, char* argv[]) {
 		}
 	}
 
-
+	//Reading configuration options
 	uint autoburst = MyOptions::GetInt(OPTION_AUTO_BURST);
 	uint pauseSeconds = MyOptions::GetInt(OPTION_DURATION_PAUSE);
 	uint pauseBurstSec = MyOptions::GetInt(OPTION_DURATION_PAUSE_BBURST);
 	uint timebased = MyOptions::GetInt(OPTION_TIME_BASED);
+	myIP = EthernetUtils::GetIPOfInterface(MyOptions::GetString(OPTION_ETH_DEVICE_NAME));
 	uint burstNum = 0;
+
 
 	//First option DEFAULT ONE: sending MEPs until the number define in options, then stop totally.
 	if (autoburst != 1 && timebased != 1){
@@ -81,7 +86,6 @@ int main(int argc, char* argv[]) {
 			sender->startThread(threadID++,
 					"Sender" + std::to_string((int) sourceID.first) + ":" + std::to_string((int) sourceID.second));
 		}
-
 
 		AExecutable::JoinAll();
 
@@ -119,15 +123,20 @@ int main(int argc, char* argv[]) {
 
 			AExecutable::JoinAll();
 			uint sentData = 0;
+			uint32_t sentFrame = 0;
 			for (auto snd : senders) {
 
 				sentData+=snd->getSentData();
+				sentFrame+=snd->getSentFrames();
 				snd->setSentDataToZero();
 
 			}
 			std::cout << "Sent in last Burst " << sentData << " bytes" << std::endl;
 			sentTotal += sentData;
-			std::cout << "Total sent " << sentTotal << " bytes" << std::endl;
+			//std::cout << "Total bytes sent " << sentTotal << " bytes" << std::endl;
+			std::cout << "Sent packets L0 " << sentFrame << std::endl;
+			std::cout << "Sent packets L1 " << framesl1 << std::endl;
+			std::cout << "Total packets sent " << framesl1 + sentFrame << std::endl;
 
 			if (timebased == 1 && autoburst != 1){
 
@@ -170,10 +179,16 @@ int main(int argc, char* argv[]) {
 void *sendingL1(void *threadid)
 {
 
-	/*socket Send to*/
+	boost::posix_time::time_duration timeTaken;
+	boost::posix_time::ptime end;
+
+	/*socket SendTo Boost*/
 	boost::asio::io_service io_service_;
+	boost::system::error_code ec;
 	boost::asio::ip::udp::socket socket_(io_service_);
 	boost::asio::ip::udp::endpoint receiver_endpoint_;
+	boost::asio::ip::udp::resolver resolver(io_service_);
+	socket_.open(boost::asio::ip::udp::v4());
 
 	/*socket receive */
 	static int sd;
@@ -181,14 +196,15 @@ void *sendingL1(void *threadid)
 	bzero(&hostAddr, sizeof(hostAddr));
 	struct sockaddr_in senderAddr;
 	socklen_t senderLen = sizeof(senderAddr);
-
-	hostAddr.sin_family = PF_INET;
-	hostAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	hostAddr.sin_family = AF_INET;
+	in_addr_t ip;
+	//inet_pton(AF_INET, "10.194.20.9", &(hostAddr.sin_addr.s_addr));
+	hostAddr.sin_addr.s_addr = myIP;
 	hostAddr.sin_port = htons(MyOptions::GetInt(OPTION_CREAM_MULTICAST_PORT));
+	char str[INET_ADDRSTRLEN];
 
-	sd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	sd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	if (sd < 0) {perror("socket()");}
-
 
 	int one = 1;
 	int r = setsockopt(sd, SOL_SOCKET, SO_REUSEPORT, (char*)&one, sizeof(one));
@@ -200,57 +216,51 @@ void *sendingL1(void *threadid)
 	}
 	/*End socket receiveFrom*/
 
-
-	int eventLength = 4;//MyOptions::GetInt(OPTION_EVENT_LENGTH);
-	auto sourceL1IDs = Options::GetIntPairList(OPTION_L1_DATA_SOURCE_IDS);
+	int eventLength = MyOptions::GetInt(OPTION_EVENT_LENGTH_L1);
+	auto sourceL1IDs = MyOptions::GetIntPairList(OPTION_L1_DATA_SOURCE_IDS);
 	char bufferl1[BUFSIZE];
 	memset(bufferl1, 0, BUFSIZE);
 
 	/*Creating dummy data to be sent*/
-	uint randomLength = 100000 * sizeof(int);
+	uint32_t randomLength = 100000 * sizeof(int);
 	char randomData[randomLength];
 	memset(randomData, 1, randomLength);
 
-	ssize_t result;
+	uint offsetTrigger = sizeof(l1::TRIGGER_RAW_HDR);
+	char* packet = new char[BUFSIZE];
+	memset(packet, 0, BUFSIZE);
+	l1::L1_EVENT_RAW_HDR *hdrToBeSent = new l1::L1_EVENT_RAW_HDR;
+	char *buffTrigger = new char[offsetTrigger];
+	uint offsetMRP = sizeof(l1::MRP_RAW_HDR);
+	char *mrpHeader = new char[offsetMRP];
+	uint numTriggers;
 
+	ssize_t result;
 
 	while(true){
 
 		result = recvfrom(sd, (void*) bufferl1, BUFSIZE, 0, (struct sockaddr *)&senderAddr, &senderLen);
+
 		if (result > 0){
 
-			char str[INET_ADDRSTRLEN];
-			uint16_t offsetTrigger = sizeof(l1::TRIGGER_RAW_HDR);
-			char* packet = new char[BUFSIZE];
-			memset(packet, 0, BUFSIZE);
-			l1::L1_EVENT_RAW_HDR *hdrToBeSent = new l1::L1_EVENT_RAW_HDR;
-			char *buffTrigger = new char[offsetTrigger];
-			uint16_t offsetMRP = sizeof(l1::MRP_FRAME_HDR);
-			char *mrpHeader = new char[offsetMRP];
-
-
 			memcpy(mrpHeader, bufferl1, offsetMRP);
-			l1::MRP_FRAME_HDR* hdrReceived = (l1::MRP_FRAME_HDR*) mrpHeader;
-			uint16_t numTriggers = hdrReceived->MRP_HDR.numberOfTriggers;
-			in_addr_t ip = hdrReceived->MRP_HDR.ipAddress;
+			l1::MRP_RAW_HDR* hdrReceived = (l1::MRP_RAW_HDR*) mrpHeader;
+			numTriggers = hdrReceived->numberOfTriggers;
+			ip = senderAddr.sin_addr.s_addr;
 			inet_ntop(AF_INET, &(ip), str, INET_ADDRSTRLEN);
 			//IP address is properly read
 
-			/***open socket Send_to with IP address***/
-			boost::system::error_code ec;
-			boost::asio::ip::udp::resolver resolver(io_service_);
+			/***Send_to with IP address***/
 			boost::asio::ip::udp::resolver::query query(boost::asio::ip::udp::v4(), str , std::to_string(MyOptions::GetInt(OPTION_CREAM_RECEIVER_PORT)));
 			receiver_endpoint_ = *resolver.resolve(query);
-			socket_.open(boost::asio::ip::udp::v4());
 
-
-
+			offsetTrigger = 0;
 			while (numTriggers > 0){
-				offsetTrigger = sizeof(l1::TRIGGER_RAW_HDR) * (numTriggers-1);
-				memcpy(buffTrigger, bufferl1 + sizeof(l1::MRP_FRAME_HDR) + offsetTrigger, sizeof(l1::TRIGGER_RAW_HDR));
+
+				memcpy(buffTrigger, bufferl1 + sizeof(l1::MRP_RAW_HDR) + offsetTrigger, sizeof(l1::TRIGGER_RAW_HDR));
+				offsetTrigger+=sizeof(l1::TRIGGER_RAW_HDR);
 				l1::TRIGGER_RAW_HDR* triggerReceived = (l1::TRIGGER_RAW_HDR*) buffTrigger;
 
-				//eventNumber_ = hdrReceived->eventNumber;
 				hdrToBeSent->eventNumber = triggerReceived->eventNumber;
 				hdrToBeSent->timestamp = triggerReceived->timestamp;
 				hdrToBeSent->l0TriggerWord = triggerReceived->triggerTypeWord;
@@ -258,35 +268,45 @@ void *sendingL1(void *threadid)
 
 				memcpy(packet + sizeof(l1::L1_EVENT_RAW_HDR), randomData, eventLength);
 
-				uint i = 0;
 				for (auto sourceID : sourceL1IDs) {
 					uint telL1 = sourceID.second;
-					for (i=0; i<telL1; i++){
-					//hdrToBeSent->sourceSubID = sourceID.second;
-					hdrToBeSent->sourceID = sourceID.first;
-					memcpy(packet, reinterpret_cast<char*> (hdrToBeSent), sizeof(l1::L1_EVENT_RAW_HDR));
+					for (uint i=0; i<telL1; i++){
+						hdrToBeSent->sourceSubID = sourceID.second;
+						hdrToBeSent->sourceID = sourceID.first;
+						memcpy(packet, reinterpret_cast<char*> (hdrToBeSent), sizeof(l1::L1_EVENT_RAW_HDR));
+						socket_.send_to(boost::asio::buffer(packet, eventLength + sizeof(l1::L1_EVENT_RAW_HDR)), receiver_endpoint_);
 
-					socket_.send_to(boost::asio::buffer(packet, eventLength + sizeof(l1::L1_EVENT_RAW_HDR)), receiver_endpoint_);
+						boost::this_thread::sleep(boost::posix_time::microsec(5));
+
+						/*******Calculating rate and data sent**********/
+						framesl1.fetch_add(1, std::memory_order_relaxed);
+						frec =  frec + 1;
+						end = boost::posix_time::microsec_clock::local_time();
+						timeTaken = end - start;
+						if (timeTaken.total_seconds() > 1){
+
+							start = boost::posix_time::second_clock::local_time();
+							std::cout << "Rate L1: "<< frec / 1000000 << " MHz" << std::endl;
+							frec = 0;
+						}
+						/***********End rate and data sent***********/
 
 					}
 				}
-				offsetTrigger -= sizeof(l1::TRIGGER_RAW_HDR);
 				numTriggers--;
 
 			}
 
-			delete[] packet;
-			delete[] buffTrigger;
-			delete[] mrpHeader;
-			delete hdrToBeSent;
-			socket_.close(ec);
+
+
 		}/*end if result*/
 
 
-		boost::this_thread::sleep(boost::posix_time::microsec(1));
-
 	}//while
-
-
+	delete[] packet;
+	delete[] buffTrigger;
+	delete[] mrpHeader;
+	delete hdrToBeSent;
+	socket_.close(ec);
 	pthread_exit(NULL);
 }

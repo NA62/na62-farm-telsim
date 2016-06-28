@@ -16,6 +16,7 @@
 /*
  * Available options
  */
+#define OPTION_ETH_DEVICE_NAME (char*)"ethDeviceName"
 #define OPTION_L0_RECEIVER_PORT (char*)"L0Port"
 #define OPTION_L1_DATA_SOURCE_IDS (char*)"L1DataSourceIDs"
 #define OPTION_CREAM_RECEIVER_PORT (char*)"CREAMPort"
@@ -26,10 +27,10 @@
 #define OPTION_EVENTS_PER_MEP (char*)"EventsPerMEP"
 #define OPTION_SENDER_ID (char*)"SenderID"
 #define OPTION_PROCESS_NUM (char*)"ProcessNum"
-#define OPTION_RECEIVER_MAC (char*)"ReceiverMAC"
 #define OPTION_RECEIVER_IP (char*)"ReceiverIP"
 #define OPTION_USE_PF_RING (char*)"UsePfRing"
 #define OPTION_EVENT_LENGTH (char*)"BytesPerMepFragment"
+#define OPTION_EVENT_LENGTH_L1 (char*)"BytesPerL1Fragment"
 
 /****************/
 #define OPTION_TIME_BASED (char*)"TimeBasedEventsGeneration[0/1]"
@@ -55,8 +56,12 @@ public:
 		desc.add_options()
 
 		(OPTION_CONFIG_FILE,
-				po::value<std::string>()->default_value(
-						"/home/julio/workspace/na62-telsim.conf"), "Config file for the options shown here")
+				po::value<std::string>()->default_value("/performance/udptest/na62-telsim.conf"),
+				"Config file for the options shown here")
+
+		(OPTION_ETH_DEVICE_NAME,
+				po::value<std::string>()->required(),
+				"Name of the device to be used for receiving data")
 
 		(OPTION_L0_RECEIVER_PORT, po::value<int>()->default_value(58913),
 				"UDP-Port for L1 data reception")
@@ -70,15 +75,11 @@ public:
 		(OPTION_L1_DATA_SOURCE_IDS, po::value<std::string>()->default_value(""),
 				"Comma separated list of all available data source IDs sending Data to L1 together with the expected numbers of packets per source. The format is like following (A,B,C are sourceIDs and a,b,c are the number of expected packets per source):\n \t A:a,B:b,C:c")
 
-
 		(OPTION_MEPS_PER_BURST, po::value<int>()->required(),
 				"Number of MEPs to be sent per burst")
 
 		(OPTION_CREAM_MULTICAST_PORT, po::value<int>()->default_value(58914),
 				"The port all L1 multicast MRPs to the CREAMs should be sent to")
-
-		(OPTION_RECEIVER_MAC, po::value<std::string>()->required(),
-				"MAC address where the MEPs should be sent to")
 
 		(OPTION_RECEIVER_IP, po::value<std::string>()->required(),
 				"IP address where the MEPs should be sent to")
@@ -95,8 +96,11 @@ public:
 		(OPTION_PROCESS_NUM, po::value<int>()->default_value(1),
 				"Number of parallel sending processes N. The event numbers sent by this instance N0 will be N0+i*N")
 
-		(OPTION_EVENT_LENGTH, po::value<int>()->default_value(140),
-				"Length of every MEP fragment")
+		(OPTION_EVENT_LENGTH, po::value<int>()->default_value(128),
+				"Length of every MEP fragment in bytes")
+
+		(OPTION_EVENT_LENGTH_L1, po::value<int>()->default_value(4),
+				"Length of L1 data fragment in bytes")
 
 		(OPTION_DURATION_GENERATE_EVENTS, po::value<int>()->default_value(0),
 				"Generate events duration")

@@ -17,22 +17,22 @@ namespace na62 {
 
 class Sender: public AExecutable {
 public:
-	Sender(uint sourceID, uint numberOfTelBoards, uint numberOfMEPsPerBurst);
+	Sender(uint sourceID, uint numberOfTelBoards, uint numberOfMEPsPerBurst, uint autoburst, uint timebased);
 	virtual ~Sender();
 	int net_bind_udp();
-	uint getSentData() {
+	inline uint getSentData() {
 		return sentData_;
 	}
-	uint64_t getSentFrames() {
+	inline uint64_t getSentFrames() {
 		return num_mens_;
 	}
-	uint64_t getFrec() {
+
+	inline double getFrec() {
 		return frec_;
 	}
 
 	inline void setSentDataToZero(){
 		sentData_ = 0;
-
 	}
 
 private:
@@ -41,28 +41,22 @@ private:
 	uint numberOfMEPsPerBurst_;
 	uint eventLength_;
 	uint durationSeconds_;
-	uint pauseSeconds_;
 	uint burstNum_;
 	uint sentData_;
 	uint autoburst_;
-	uint sock_;
 	uint timebased_;
 	boost::posix_time::ptime start_;
-	std::atomic<uint64_t> num_mens_;
-	std::atomic<double> frec_;
+	//std::atomic<uint64_t> num_mens_;
+	//std::atomic<double> frec_;
+	uint32_t num_mens_;
+	double frec_;
+	uint rateL0_;
+	uint optRateL0_;
 	uint32_t myIP_;
 
 	boost::asio::io_service io_service_;
 	boost::asio::ip::udp::socket socket_;
 	boost::asio::ip::udp::endpoint receiver_endpoint_;
-
-	/***L1***/
-	//boost::asio::io_service io_servicel1_;
-	//boost::asio::ip::udp::socket socketl1_;
-	//boost::asio::ip::udp::endpoint receiver_endpointl1_;
-
-
-
 
 	void thread();
 

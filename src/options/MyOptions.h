@@ -39,8 +39,9 @@
 /****************/
 #define OPTION_DURATION_PAUSE_BBURST (char*)"PauseAmongFarmBurstSignal(seconds)"
 #define OPTION_AUTO_BURST (char*) "FollowFarmAutoBurst"
-
-
+/****************/
+#define OPTION_RATE_L0 (char*)"RateL0[5/15/120]KHz"
+#define OPTION_RATE_L1 (char*)"RateL1[5/15/120]KHz"
 /*
  * Performance
  */
@@ -117,6 +118,11 @@ public:
 		(OPTION_TIME_BASED, po::value<int>()->default_value(0),
 				"Events generation based on time: duration time and pause")
 
+		(OPTION_RATE_L0, po::value<int>()->default_value(0),
+				 "L0 data rate")
+
+		(OPTION_RATE_L1, po::value<int>()->default_value(0),
+				 "L1 data rate")
 
 				;
 

@@ -49,9 +49,11 @@ int main(int argc, char* argv[]) {
 	std::vector<Sender*> senders;
 
 
+	std::cout <<"Ip of my interface: "<< EthernetUtils::GetIPOfInterface(MyOptions::GetString(OPTION_ETH_DEVICE_NAME))<<std::endl;
+
 	for( auto sourceL1 : sourceIDL1 ){
 
-		std::cout << "Starting sender with SourceID " << std::hex
+		std::cout << "Starting sender L1 with SourceID " << std::hex
 				<< sourceL1.first << ":" << sourceL1.second << std::dec << std::endl;
 		SenderL1* senderl1 = new SenderL1();
 		sendersl1.push_back(senderl1);
@@ -65,8 +67,7 @@ int main(int argc, char* argv[]) {
 	if (autoburst != 1 && timebased != 1){
 
 		for (auto sourceID : sourceIDs) {
-
-			std::cout << "Starting sender with SourceID " << std::hex
+			std::cout << "Starting sender L0 with SourceID " << std::hex
 					<< sourceID.first << ":" << sourceID.second << std::dec << std::endl;
 			Sender* sender = new Sender(sourceID.first, sourceID.second,
 					Options::GetInt(OPTION_MEPS_PER_BURST), autoburst, timebased);

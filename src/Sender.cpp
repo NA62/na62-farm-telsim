@@ -99,6 +99,7 @@ void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
 	uint32_t firstEventNum = 0;
 	uint randomLength = 100000 * sizeof(int);
 	char randomData[randomLength];
+	srand(1);
 	for (unsigned int i = 0; i < randomLength / sizeof(int); i++) {
 		int data = rand();
 		memcpy(randomData + (i * sizeof(int)), &data, sizeof(int));
@@ -116,16 +117,15 @@ void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
 		uint bursts = 1;
 		for (unsigned int BurstNum = 0; BurstNum < bursts; BurstNum++) {
 
-			for (unsigned int MEPNum = BurstNum * numberOfMEPsPerBurst_;
-					MEPNum < numberOfMEPsPerBurst_ * (1 + BurstNum); MEPNum++) {
-				bool isLastMEPOfBurst = MEPNum
-						== numberOfMEPsPerBurst_ * (1 + BurstNum) - 1;
+			for (unsigned int MEPNum = BurstNum * numberOfMEPsPerBurst_; MEPNum < numberOfMEPsPerBurst_ * (1 + BurstNum); MEPNum++) {
+				bool isLastMEPOfBurst = MEPNum == numberOfMEPsPerBurst_ * (1 + BurstNum) - 1;
 				for (uint i = 0; i < tel62Num; i++) {
 					//std::cout << "sendMEPs for source ID " << (int) sourceID_ <<":"<< i << std::endl;
 					sentData_ += sendMEP(packet, firstEventNum, eventsPerMEP,
 							randomLength, randomData, isLastMEPOfBurst);
 				}
 				firstEventNum += eventsPerMEP;
+				LOG_INFO("firstEventNum: " << firstEventNum);
 			}
 
 		}
@@ -133,7 +133,9 @@ void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
 		delete[] packet;
 
 
-	}if(autoburst_ == 1){
+	}
+
+	if(autoburst_ == 1){
 
 
 		struct sockaddr_in senderAddr;
@@ -154,8 +156,7 @@ void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
 
 			for (uint i = 0; i < tel62Num; i++) {
 
-				sentData_ += sendMEP(packet, firstEventNum, eventsPerMEP,
-						randomLength, randomData, 0);
+				sentData_ += sendMEP(packet, firstEventNum, eventsPerMEP, randomLength, randomData, 0);
 			}
 			firstEventNum += eventsPerMEP;
 
@@ -163,15 +164,14 @@ void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
 		//chBurst = false;
 		//After breaking the loop suddenly, let's send last
 		//for (uint i = 0; i < tel62Num; i++) {
-		sentData_ += sendMEP(packet, firstEventNum, eventsPerMEP,
-				randomLength, randomData, 1);
+		sentData_ += sendMEP(packet, firstEventNum, eventsPerMEP, randomLength, randomData, 1);
 
 		close(sock);
 		firstEventNum = 0;
 		delete[] packet;
+	}
 
-
-	}if(timebased_ == 1 && autoburst_ != 1){
+	if(timebased_ == 1 && autoburst_ != 1){
 
 		time_t start = time(0);
 		time_t timeLeft = (time_t) durationSeconds_;
@@ -198,10 +198,7 @@ void Sender::sendMEPs(uint8_t sourceID, uint tel62Num) {
 
 		firstEventNum = 0;
 		delete[] packet;
-
 	}
-
-
 }
 
 uint16_t Sender::sendMEP(char* buffer, uint32_t firstEventNum,

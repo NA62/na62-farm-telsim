@@ -48,6 +48,7 @@ SenderL1::SenderL1() : sourceID_(0), eventNumber_(0), eventLength_(0), io_servic
 	eventLength_ = MyOptions::GetInt(OPTION_EVENT_LENGTH_L1);
 	optRateL1_ = MyOptions::GetInt(OPTION_RATE_L1);
 	myIP_ = EthernetUtils::GetIPOfInterface(MyOptions::GetString(OPTION_ETH_DEVICE_NAME));
+	LOG_INFO("Binding to interface: " << MyOptions::GetString(OPTION_ETH_DEVICE_NAME) << "Listening on: " << MyOptions::GetInt(OPTION_CREAM_MULTICAST_PORT));
 
 	if (optRateL1_!=0){
 		switch (optRateL1_) {
@@ -115,15 +116,26 @@ void SenderL1::sendL1MEP() {
 
 		if (result == -1) {
 			if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-				//LOG_INFO("Timeout");
+				LOG_INFO("Timeout");
 				setEndL1();
 			}
+			LOG_INFO("Timeout");
 
 		}else{
+
+
+
 			++mrps_;
 			memcpy(mrpHeader, bufferl1, offsetMRP);
 			l1::MRP_RAW_HDR* hdrReceived = (l1::MRP_RAW_HDR*) mrpHeader;
-			numTriggers = hdrReceived->numberOfTriggers;
+			numTriggers = ntohs(hdrReceived->numberOfTriggers);
+
+
+
+			LOG_INFO("----");
+			LOG_INFO("Received MRP with:  " << numTriggers << " triggers");
+			//continue;
+
 			ip = senderAddr.sin_addr.s_addr;
 			inet_ntop(AF_INET, &(ip), str, INET_ADDRSTRLEN);
 			//IP address is properly read
@@ -139,11 +151,14 @@ void SenderL1::sendL1MEP() {
 				offsetTrigger+=sizeof(l1::TRIGGER_RAW_HDR);
 				l1::TRIGGER_RAW_HDR* triggerReceived = (l1::TRIGGER_RAW_HDR*) buffTrigger;
 
-				hdrToBeSent->eventNumber = triggerReceived->eventNumber;
+				//Take cara of Endianness
+				//LOG_INFO("Received MRP with event number:  " << triggerReceived->eventNumber);
+				LOG_INFO("Received MRP with event number:  " << ntohl(triggerReceived->eventNumber << 8));
+
+				hdrToBeSent->eventNumber = ntohl(triggerReceived->eventNumber << 8);
 				hdrToBeSent->timestamp = triggerReceived->timestamp;
 				hdrToBeSent->l0TriggerWord = triggerReceived->triggerTypeWord;
 				hdrToBeSent->numberOf4BWords = 5;
-
 
 				memcpy(packet + sizeof(l1::L1_EVENT_RAW_HDR), randomData, eventLength_);
 
@@ -175,19 +190,11 @@ void SenderL1::sendL1MEP() {
 							frec_ = 0;
 						}
 						/***********End rate***********/
-
-
 					}
 				}
 				numTriggers--;
-
 			}
-
-
-
 		}/*end if result*/
-
-
 	}//while
 	delete[] packet;
 	delete[] buffTrigger;
@@ -199,7 +206,34 @@ void SenderL1::sendL1MEP() {
 
 int SenderL1::net_bind_udpl1(){
 
-	static int sd;
+	//static
+	int sd;
+
+	sd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	if (sd < 0) {
+		perror("socket()");
+	}
+
+	/* Enable SO_REUSEADDR to allow multiple instances of this */
+	/* application to receive copies of the multicast datagrams. */
+	int reuse = 1;
+	int r = setsockopt(sd, SOL_SOCKET, SO_REUSEPORT, (char*)&reuse, sizeof(reuse));
+	if (r < 0) {
+		perror("setsockopt(SO_REUSEPORT)");
+	}
+
+//	Disabling timeout
+//	//Setting options for timeout
+//	struct timeval tv;
+//
+//	tv.tv_sec = 2;
+//	tv.tv_usec = 0;
+//
+//	if (setsockopt(sd, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv,sizeof(struct timeval))==-1){
+//		LOG_ERROR("setting timeout Telsim request");
+//	}
+
+
 	struct sockaddr_in hostAddr;
 	bzero(&hostAddr, sizeof(hostAddr));
 	hostAddr.sin_family = AF_INET;
@@ -208,29 +242,35 @@ int SenderL1::net_bind_udpl1(){
 	hostAddr.sin_port = htons(MyOptions::GetInt(OPTION_CREAM_MULTICAST_PORT));
 
 
-	sd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-	if (sd < 0) {perror("socket()");}
-
-	int one = 1;
-	int r = setsockopt(sd, SOL_SOCKET, SO_REUSEPORT, (char*)&one, sizeof(one));
-	if (r < 0) {perror("setsockopt(SO_REUSEPORT)");}
-
-	struct timeval tv;
-
-	tv.tv_sec = 2;
-	tv.tv_usec = 0;
-
-	if (setsockopt(sd, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv,sizeof(struct timeval))==-1){
-		LOG_ERROR("setting timeout Telsim request");
-	}
-
 	//binding socket
 	if (bind (sd, (struct sockaddr *)&hostAddr, sizeof(hostAddr)) < 0) {
 		perror("bind()");
 	}
 
-	return sd;
+	/* Join the multicast group224.0.0.251 on the local 203.106.93.94 */
+	/* interface. Note that this IP_ADD_MEMBERSHIP option must be */
+	/* called for each local interface over which the multicast */
+	/* datagrams are to be received. */
+//	struct ip_mreq group;
+//	group.imr_multiaddr.s_addr = inet_addr("224.0.0.251");
+//	group.imr_interface.s_addr = inet_addr("127.0.0.1");
+//
+//	if(setsockopt(sd, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&group, sizeof(group)) < 0) {
+//		perror("Adding multicast group error");
+//		//close(sd);
+//	}
 
+
+//Enable loopback multicast
+//    char loopch = 1;
+//    if(setsockopt(sd, IPPROTO_IP, IP_MULTICAST_LOOP, (char *)&loopch, sizeof(loopch)) < 0){
+//		perror("Setting IP_MULTICAST_LOOP error");
+//    }
+
+
+
+
+	return sd;
 }
 
 
